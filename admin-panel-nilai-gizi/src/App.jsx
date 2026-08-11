@@ -156,23 +156,12 @@ function Toast({ message }) {
 
 // ── QR CODE SECTION FOR PUBLIC DISPLAY ──
 function QRCodeSection({ showToast }) {
-  const DEFAULT_PUBLIC_URL = 'https://sppg-binawidya-simpang-baru-7-nilai.vercel.app/'
-  const [publicUrl, setPublicUrl] = useState(DEFAULT_PUBLIC_URL)
+  const PUBLIC_URL = 'https://sppg-binawidya-simpang-baru-7-nilai.vercel.app/'
   const canvasRef = useRef(null)
 
   useEffect(() => {
-    storageGet('sppg-public-url').then(res => {
-      if (res?.value) {
-        setPublicUrl(res.value)
-      } else {
-        setPublicUrl(DEFAULT_PUBLIC_URL)
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!canvasRef.current || !publicUrl) return
-    QRCode.toCanvas(canvasRef.current, publicUrl, {
+    if (!canvasRef.current) return
+    QRCode.toCanvas(canvasRef.current, PUBLIC_URL, {
       width: 140,
       margin: 2,
       color: {
@@ -182,17 +171,10 @@ function QRCodeSection({ showToast }) {
     }, (err) => {
       if (err) console.error('QR code error:', err)
     })
-  }, [publicUrl])
-
-  const handleUrlChange = (e) => {
-    const val = e.target.value
-    setPublicUrl(val)
-    storageSet('sppg-public-url', val)
-  }
+  }, [PUBLIC_URL])
 
   const copyLink = () => {
-    if (!publicUrl) return
-    navigator.clipboard.writeText(publicUrl).then(() => showToast('Link berhasil disalin! ✓'))
+    navigator.clipboard.writeText(PUBLIC_URL).then(() => showToast('Link berhasil disalin! ✓'))
   }
 
   const downloadQr = () => {
@@ -214,17 +196,10 @@ function QRCodeSection({ showToast }) {
       </div>
       <div className="qr-text">
         <b>📱 QR Code Tampilan Publik</b>
-        <span>Scan QR Code ini untuk membuka halaman <strong>tampil-data-nilai-gizi</strong> di HP.</span>
+        <span>Scan QR Code ini untuk membuka halaman <strong>tampil-data-nilai-gizi</strong> secara langsung.</span>
         
-        <div className="field" style={{ marginTop: '10px', marginBottom: '8px' }}>
-          <label style={{ fontSize: '11px' }}>URL Publik (Local / Vercel):</label>
-          <input
-            type="text"
-            value={publicUrl}
-            onChange={handleUrlChange}
-            placeholder="https://tampil-data-nilai-gizi.vercel.app"
-            style={{ fontSize: '12px', padding: '8px 10px' }}
-          />
+        <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+          <span className="qr-url">{PUBLIC_URL}</span>
         </div>
 
         <div className="qr-actions">
