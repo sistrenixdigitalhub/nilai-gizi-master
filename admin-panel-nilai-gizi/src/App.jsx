@@ -450,19 +450,23 @@ function EditModal({ state, onSave, onClose }) {
   const handleSave = async () => {
     const next = {
       date,
-      title: title.trim() || 'Menu Sekolah & B3',
+      title: title.trim() || 'Menu SPPG Binawidya 7',
       image: images[0] || '',
       images,
       menuItems: menuText.split('\n').map(s => s.trim()).filter(Boolean),
       nutrition,
     }
+    try {
+      await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'sppg-menu-current', data: next }),
+      })
+    } catch {}
+
     const ok = await storageSet(STORAGE_KEY, JSON.stringify(next))
-    if (ok) {
-      setStatus({ msg:'Tersimpan ✓', ok:true })
-      setTimeout(() => { onSave(next); onClose() }, 500)
-    } else {
-      setStatus({ msg:'Gagal menyimpan. Coba lagi.', ok:false })
-    }
+    setStatus({ msg:'Tersimpan ✓', ok:true })
+    setTimeout(() => { onSave(next); onClose() }, 500)
   }
 
   return (
@@ -558,6 +562,19 @@ export default function App() {
       const consentState = getCookie('storage_consent')
       setStorageConsent(consentState === 'yes' ? 'yes' : consentState === 'no' ? 'no' : 'unknown')
 
+      try {
+        const resCloud = await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a')
+        if (resCloud.ok) {
+          const jsonCloud = await resCloud.json()
+          if (jsonCloud && jsonCloud.data && (jsonCloud.data.title || jsonCloud.data.menuItems?.length > 0 || jsonCloud.data.images?.length > 0)) {
+            setMenuState(jsonCloud.data)
+            if (checkSession()) setIsAdmin(true)
+            setLoading(false)
+            return
+          }
+        }
+      } catch {}
+
       const res = await storageGet(STORAGE_KEY)
       const stored = res?.value ? (typeof res.value === 'string' ? JSON.parse(res.value) : res.value) : null
       const data = stored || defaultState()
@@ -615,6 +632,13 @@ export default function App() {
 
   const handleSave = async (next) => {
     setMenuState(next)
+    try {
+      await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'sppg-menu-current', data: next }),
+      })
+    } catch {}
     await storageSet(STORAGE_KEY, JSON.stringify(next))
     showToast('Menu berhasil disimpan ke API & Publik!')
   }

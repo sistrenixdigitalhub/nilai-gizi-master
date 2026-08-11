@@ -71,7 +71,41 @@ async function writeGithubStorage(content, sha) {
   }
 }
 
+const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
+
+async function fetchCloudDb() {
+  try {
+    const res = await fetch(CLOUD_DB_URL)
+    if (res.ok) {
+      const json = await res.json()
+      if (json && json.data) return json.data
+    }
+  } catch {
+    // Ignore error
+  }
+  return null
+}
+
+async function saveCloudDb(dataObj) {
+  if (!dataObj) return
+  try {
+    await fetch(CLOUD_DB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'sppg-menu-current', data: dataObj }),
+    })
+  } catch {
+    // Ignore error
+  }
+}
+
 async function getStorageData() {
+  const cloudData = await fetchCloudDb()
+  if (cloudData) {
+    globalThis._sppg_store = globalThis._sppg_store || {}
+    globalThis._sppg_store[STORAGE_KEY] = cloudData
+  }
+
   const gh = await readGithubStorage()
   if (gh && gh.data) {
     globalThis._sppg_store = { ...globalThis._sppg_store, ...gh.data }
@@ -85,11 +119,14 @@ async function getStorageData() {
   } catch {
     // Keep in-memory
   }
-  return { data: globalThis._sppg_store, sha: null }
+  return { data: globalThis._sppg_store || {}, sha: null }
 }
 
 async function saveStorageData(data, sha) {
   globalThis._sppg_store = data
+  if (data[STORAGE_KEY]) {
+    await saveCloudDb(data[STORAGE_KEY])
+  }
   const content = JSON.stringify(data, null, 2)
   if (GITHUB_TOKEN) {
     await writeGithubStorage(content, sha)

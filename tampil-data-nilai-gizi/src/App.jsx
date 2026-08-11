@@ -68,8 +68,28 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [photoIndex, setPhotoIndex] = useState(0)
 
+const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
+
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
+
+    // 0. Try Cloud Database (Persistent REST store)
+    try {
+      const resCloud = await fetch(CLOUD_DB_URL)
+      if (resCloud.ok) {
+        const jsonCloud = await resCloud.json()
+        if (jsonCloud && jsonCloud.data && (jsonCloud.data.title || jsonCloud.data.menuItems?.length > 0 || jsonCloud.data.images?.length > 0 || jsonCloud.data.image)) {
+          setData(jsonCloud.data)
+          setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+          setLoading(false)
+          setRefreshing(false)
+          return
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
     try {
       // 1. Try API /api/nilai-gizi
       const res = await fetch(API_URL)
