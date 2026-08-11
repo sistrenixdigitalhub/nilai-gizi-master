@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://sppg-nilai-gizi.vercel.app/api/nilai-gizi'
+const API_URL = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/nilai-gizi'
 const STORAGE_KEY = 'sppg-menu-current'
+const STORAGE_ENDPOINT_FALLBACK = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
 
 const CATS = [
   { key: 'k1',     label: 'Porsi Kecil',  sub: 'TK/PAUD & SD 1–3' },
@@ -95,7 +96,7 @@ export default function App() {
 
     try {
       // 2. Try generic storage endpoint
-      const res2 = await fetch(`http://localhost:5000/api/storage?key=${STORAGE_KEY}`)
+      const res2 = await fetch(`${STORAGE_ENDPOINT_FALLBACK}?key=${STORAGE_KEY}`)
       if (res2.ok) {
         const json2 = await res2.json()
         if (json2.value) {

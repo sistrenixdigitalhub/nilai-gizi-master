@@ -61,7 +61,7 @@ function defaultState() {
 }
 
 // ── STORAGE HELPERS ──
-const STORAGE_API = import.meta.env.VITE_API_URL || 'https://sppg-nilai-gizi.vercel.app/api/storage'
+const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
 
 async function storageGet(key) {
   try {
@@ -170,7 +170,7 @@ function QRCodeSection({ showToast }) {
       if (res?.value) {
         setPublicUrl(res.value)
       } else {
-        setPublicUrl('http://localhost:5174')
+        setPublicUrl('https://sppg-binawidya-simpang-baru-7-nilai.vercel.app')
       }
     })
   }, [])
