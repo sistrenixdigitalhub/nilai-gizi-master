@@ -6,26 +6,26 @@ const STORAGE_KEY = 'sppg-menu-current'
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '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'
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || 'sistrenixdigitalhub/nilai-gizi-master'
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'main'
-const GH_FILE_PATH = 'data/storage.json'
+const GH_FILE_PATH = 'data/menu.json'   // dedicated menu file, no key wrapping
 
-const DEFAULT_DATA = {
-  date: new Date().toISOString().slice(0, 10),
+const DEFAULT_MENU = {
+  date: '',
   title: '',
   image: '',
   images: [],
   menuItems: [],
   nutrition: {
-    k1: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-    k2: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+    k1:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+    k2:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
     balita: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-    bumil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
-  }
+    bumil:  { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+  },
 }
 
-// ── GITHUB STORAGE ──
-async function readGithubStorage() {
+// ── GITHUB HELPERS ──
+async function ghGet() {
   try {
-    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${GH_FILE_PATH}?ref=${encodeURIComponent(GITHUB_BRANCH)}&t=${Date.now()}`
+    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${GH_FILE_PATH}?t=${Date.now()}`
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${GITHUB_TOKEN}`,
@@ -38,34 +38,35 @@ async function readGithubStorage() {
     const json = await res.json()
     if (!json.content) return null
     const decoded = Buffer.from(json.content.replace(/\n/g, ''), 'base64').toString('utf-8')
-    return { data: JSON.parse(decoded || '{}'), sha: json.sha }
+    return { menu: JSON.parse(decoded), sha: json.sha }
   } catch {
     return null
   }
 }
 
-async function writeGithubStorage(content, sha) {
+async function ghPut(menuObj, sha) {
   try {
     const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${GH_FILE_PATH}`
 
-    // Get current sha if not provided
+    // Refresh sha in case it changed
     if (!sha) {
-      const checkRes = await fetch(url, {
+      const check = await fetch(url, {
         headers: {
           Authorization: `Bearer ${GITHUB_TOKEN}`,
           Accept: 'application/vnd.github+json',
           'User-Agent': 'nilai-gizi-sppg',
         },
       })
-      if (checkRes.ok) {
-        const existing = await checkRes.json()
-        sha = existing.sha
+      if (check.ok) {
+        const ex = await check.json()
+        sha = ex.sha
       }
     }
 
+    const content = Buffer.from(JSON.stringify(menuObj, null, 2), 'utf-8').toString('base64')
     const body = {
-      message: `Update nilai-gizi data [${new Date().toISOString()}]`,
-      content: Buffer.from(content, 'utf-8').toString('base64'),
+      message: `update menu [${new Date().toISOString()}]`,
+      content,
       branch: GITHUB_BRANCH,
     }
     if (sha) body.sha = sha
@@ -87,39 +88,6 @@ async function writeGithubStorage(content, sha) {
   }
 }
 
-// ── GET + SAVE STORAGE ──
-async function getStorageData() {
-  const gh = await readGithubStorage()
-  if (gh && gh.data) {
-    return { data: gh.data, sha: gh.sha }
-  }
-
-  // Fallback: in-memory + /tmp
-  try {
-    const raw = await fs.readFile(FILE_PATH, 'utf-8')
-    return { data: JSON.parse(raw || '{}'), sha: null }
-  } catch {
-    return { data: { [STORAGE_KEY]: DEFAULT_DATA }, sha: null }
-  }
-}
-
-async function saveStorageData(data, sha) {
-  const content = JSON.stringify(data, null, 2)
-
-  // Primary: write to GitHub
-  const newSha = await writeGithubStorage(content, sha)
-
-  // Secondary: also cache to /tmp
-  try {
-    await fs.mkdir(path.dirname(FILE_PATH), { recursive: true })
-    await fs.writeFile(FILE_PATH, content, 'utf-8')
-  } catch {
-    // Ignore tmp write errors
-  }
-
-  return newSha
-}
-
 // ── CORS ──
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -130,19 +98,15 @@ function setCors(res) {
 // ── HANDLER ──
 export default async function handler(req, res) {
   setCors(res)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end()
 
+  // GET — return current menu
   if (req.method === 'GET') {
-    const key = req.query?.key
-      || new URL(req.url, `http://${req.headers.host}`).searchParams.get('key')
-      || STORAGE_KEY
     try {
-      const { data } = await getStorageData()
-      const val = data[key] ?? (key === STORAGE_KEY ? DEFAULT_DATA : null)
+      const gh = await ghGet()
+      const menu = (gh && gh.menu) ? gh.menu : DEFAULT_MENU
       return res.status(200).json({
-        value: typeof val === 'object' && val !== null ? JSON.stringify(val) : val,
+        value: JSON.stringify(menu),
         persistent: true,
       })
     } catch (err) {
@@ -150,6 +114,7 @@ export default async function handler(req, res) {
     }
   }
 
+  // POST — save new menu
   if (req.method === 'POST') {
     try {
       let body = req.body
@@ -167,19 +132,24 @@ export default async function handler(req, res) {
         })
       }
 
-      const { key, value } = body || {}
-      if (!key) {
-        return res.status(400).json({ error: 'Missing key' })
+      // Accept either { key, value } or direct menu object
+      let menuObj = null
+      if (body?.key === STORAGE_KEY && body?.value) {
+        menuObj = typeof body.value === 'string' ? JSON.parse(body.value) : body.value
+      } else if (body?.title !== undefined || body?.menuItems !== undefined) {
+        menuObj = body
+      } else {
+        return res.status(400).json({ error: 'Missing menu data' })
       }
 
-      let parsedValue = value
-      if (typeof value === 'string') {
-        try { parsedValue = JSON.parse(value) } catch { parsedValue = value }
-      }
+      const gh = await ghGet()
+      await ghPut(menuObj, gh?.sha || null)
 
-      const { data, sha } = await getStorageData()
-      data[key] = parsedValue
-      await saveStorageData(data, sha)
+      // Also cache to /tmp
+      try {
+        await fs.mkdir(path.dirname(FILE_PATH), { recursive: true })
+        await fs.writeFile(FILE_PATH, JSON.stringify(menuObj, null, 2), 'utf-8')
+      } catch {}
 
       return res.status(200).json({ ok: true, persistent: true })
     } catch (err) {

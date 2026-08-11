@@ -471,26 +471,8 @@ function EditModal({ state, onSave, onClose }) {
       nutrition,
     }
 
-    // Save full-res photos to localStorage (admin device)
-    try { localStorage.setItem(PHOTOS_LOCAL_KEY, JSON.stringify(images)) } catch {}
-
-    // Build thumbnail version for Vercel API (smaller payload)
-    let thumbImages = []
-    try {
-      thumbImages = await Promise.all(images.map(url => resizeImageToThumbnail(url, 320, 0.55)))
-    } catch { thumbImages = images }
-
-    const payload = {
-      date,
-      title: next.title,
-      image: thumbImages[0] || '',
-      images: thumbImages,
-      menuItems: next.menuItems,
-      nutrition,
-    }
-
-    // Save to Vercel /api/storage → persists to GitHub
-    await storageSet(STORAGE_KEY, JSON.stringify(payload))
+    // Save to Vercel /api/storage → persists to GitHub as data/menu.json
+    await storageSet(STORAGE_KEY, JSON.stringify(next))
 
     setStatus({ msg: 'Tersimpan ✓', ok: true })
     setTimeout(() => { onSave(next); onClose() }, 500)
@@ -588,23 +570,13 @@ export default function App() {
       const consentState = getCookie('storage_consent')
       setStorageConsent(consentState === 'yes' ? 'yes' : consentState === 'no' ? 'no' : 'unknown')
 
-      // Load from Vercel API (backed by GitHub) — single source of truth
+      // Load from Vercel API (backed by GitHub data/menu.json)
       const res = await storageGet(STORAGE_KEY)
       if (res?.value) {
         try {
           const stored = typeof res.value === 'string' ? JSON.parse(res.value) : res.value
           if (stored && (stored.title || stored.menuItems?.length > 0)) {
-            // Merge with local full-res photos if available
-            try {
-              const localPhotos = JSON.parse(localStorage.getItem(PHOTOS_LOCAL_KEY) || '[]')
-              if (localPhotos.length > 0) {
-                setMenuState({ ...stored, images: localPhotos, image: localPhotos[0] || '' })
-              } else {
-                setMenuState(stored)
-              }
-            } catch {
-              setMenuState(stored)
-            }
+            setMenuState(stored)
             if (checkSession()) setIsAdmin(true)
             setLoading(false)
             return

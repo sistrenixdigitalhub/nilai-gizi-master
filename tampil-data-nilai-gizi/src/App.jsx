@@ -59,8 +59,10 @@ function getPhotoList(state) {
   return []
 }
 
-const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
-const STORAGE_ENDPOINT_FALLBACK = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
+
+const STORAGE_ENDPOINT = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
+// GitHub raw URL — always fresh, no rate limit for public repo raw files
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
 
 export default function App() {
   const [data, setData]             = useState(null)
@@ -80,9 +82,21 @@ export default function App() {
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // PRIMARY: Vercel /api/storage → backed by GitHub (persistent)
+    // PRIMARY: Read directly from GitHub raw (fastest, no Vercel cold start)
     try {
-      const res = await fetch(`${STORAGE_ENDPOINT_FALLBACK}?key=sppg-menu-current&_=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(GITHUB_RAW_URL + '?_=' + Date.now(), { cache: 'no-store' })
+      if (res.ok) {
+        const d = await res.json()
+        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+          applyData(d)
+          return
+        }
+      }
+    } catch {}
+
+    // FALLBACK: Vercel /api/storage (which reads from GitHub)
+    try {
+      const res = await fetch(`${STORAGE_ENDPOINT}?_=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
         const json = await res.json()
         if (json.value) {
@@ -91,18 +105,6 @@ export default function App() {
             applyData(d)
             return
           }
-        }
-      }
-    } catch {}
-
-    // FALLBACK: try /api/nilai-gizi endpoint
-    try {
-      const res = await fetch(API_URL)
-      if (res.ok) {
-        const json = await res.json()
-        if (json.success && json.data) {
-          applyData(typeof json.data === 'string' ? JSON.parse(json.data) : json.data)
-          return
         }
       }
     } catch {}
