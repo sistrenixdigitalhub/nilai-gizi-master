@@ -130,7 +130,7 @@ function getPhotoList(state) {
   return []
 }
 
-function resizeImage(file, maxWidth) {
+function resizeImage(file, maxWidth = 800) {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -138,10 +138,10 @@ function resizeImage(file, maxWidth) {
       img.onload = () => {
         const scale  = Math.min(1, maxWidth / img.width)
         const canvas = document.createElement('canvas')
-        canvas.width  = img.width  * scale
-        canvas.height = img.height * scale
+        canvas.width  = Math.round(img.width  * scale)
+        canvas.height = Math.round(img.height * scale)
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', 0.82))
+        resolve(canvas.toDataURL('image/jpeg', 0.72))
       }
       img.src = e.target.result
     }
@@ -405,7 +405,7 @@ function EditModal({ state, onSave, onClose }) {
   const handleFile = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    const dataUrls = await Promise.all(files.map(file => resizeImage(file, 1200)))
+    const dataUrls = await Promise.all(files.map(file => resizeImage(file, 800)))
     setImages(prev => [...prev, ...dataUrls])
     e.target.value = ''
   }
