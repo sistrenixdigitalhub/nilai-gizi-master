@@ -58,33 +58,9 @@ function defaultState() {
   }
 }
 
-// ── CLOUD DB ──
-const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
-const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
-
-async function cloudGet() {
-  try {
-    const res = await fetch(CLOUD_DB_URL, { cache: 'no-store' })
-    if (res.ok) {
-      const json = await res.json()
-      return (json && json.data) ? json.data : null
-    }
-  } catch {}
-  return null
-}
-
-async function cloudSet(dataWithoutPhotos) {
-  try {
-    await fetch(CLOUD_DB_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'sppg-menu-current', data: dataWithoutPhotos }),
-    })
-  } catch {}
-}
-
 // ── STORAGE HELPERS ──
 const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
+const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
 
 async function storageGet(key) {
   try {
@@ -484,9 +460,8 @@ function EditModal({ state, onSave, onClose }) {
   }
 
   const handleSave = async () => {
-    setStatus({ msg:'Menyimpan...', ok:true })
+    setStatus({ msg: 'Menyimpan...', ok: true })
 
-    // Build full data object (with full-res photos)
     const next = {
       date,
       title: title.trim() || 'Menu SPPG Binawidya 7',
@@ -496,16 +471,16 @@ function EditModal({ state, onSave, onClose }) {
       nutrition,
     }
 
-    // Save full photos to localStorage (admin device only)
+    // Save full-res photos to localStorage (admin device)
     try { localStorage.setItem(PHOTOS_LOCAL_KEY, JSON.stringify(images)) } catch {}
 
-    // Build cloud payload: compress photos to thumbnails to fit Cloud DB
+    // Build thumbnail version for Vercel API (smaller payload)
     let thumbImages = []
     try {
       thumbImages = await Promise.all(images.map(url => resizeImageToThumbnail(url, 320, 0.55)))
     } catch { thumbImages = images }
 
-    const cloudPayload = {
+    const payload = {
       date,
       title: next.title,
       image: thumbImages[0] || '',
@@ -514,13 +489,10 @@ function EditModal({ state, onSave, onClose }) {
       nutrition,
     }
 
-    // Save thumbnail version to Cloud DB (for Tampilan Publik)
-    await cloudSet(cloudPayload)
+    // Save to Vercel /api/storage → persists to GitHub
+    await storageSet(STORAGE_KEY, JSON.stringify(payload))
 
-    // Also save full version to Vercel API storage as backup
-    await storageSet(STORAGE_KEY, JSON.stringify(next))
-
-    setStatus({ msg:'Tersimpan ✓', ok:true })
+    setStatus({ msg: 'Tersimpan ✓', ok: true })
     setTimeout(() => { onSave(next); onClose() }, 500)
   }
 
@@ -616,30 +588,31 @@ export default function App() {
       const consentState = getCookie('storage_consent')
       setStorageConsent(consentState === 'yes' ? 'yes' : consentState === 'no' ? 'no' : 'unknown')
 
-      // Try Cloud DB first (most up-to-date)
-      const cloudData = await cloudGet()
-      if (cloudData && (cloudData.title || (cloudData.menuItems && cloudData.menuItems.length > 0))) {
-        // Merge cloud text data with local full-res photos if available
+      // Load from Vercel API (backed by GitHub) — single source of truth
+      const res = await storageGet(STORAGE_KEY)
+      if (res?.value) {
         try {
-          const localPhotos = JSON.parse(localStorage.getItem(PHOTOS_LOCAL_KEY) || '[]')
-          if (localPhotos.length > 0) {
-            setMenuState({ ...cloudData, images: localPhotos, image: localPhotos[0] || '' })
-          } else {
-            setMenuState(cloudData)
+          const stored = typeof res.value === 'string' ? JSON.parse(res.value) : res.value
+          if (stored && (stored.title || stored.menuItems?.length > 0)) {
+            // Merge with local full-res photos if available
+            try {
+              const localPhotos = JSON.parse(localStorage.getItem(PHOTOS_LOCAL_KEY) || '[]')
+              if (localPhotos.length > 0) {
+                setMenuState({ ...stored, images: localPhotos, image: localPhotos[0] || '' })
+              } else {
+                setMenuState(stored)
+              }
+            } catch {
+              setMenuState(stored)
+            }
+            if (checkSession()) setIsAdmin(true)
+            setLoading(false)
+            return
           }
-        } catch {
-          setMenuState(cloudData)
-        }
-        if (checkSession()) setIsAdmin(true)
-        setLoading(false)
-        return
+        } catch {}
       }
 
-      // Fallback: try Vercel API storage
-      const res = await storageGet(STORAGE_KEY)
-      const stored = res?.value ? (typeof res.value === 'string' ? JSON.parse(res.value) : res.value) : null
-      setMenuState(stored || defaultState())
-
+      setMenuState(defaultState())
       if (checkSession()) setIsAdmin(true)
       setLoading(false)
     }

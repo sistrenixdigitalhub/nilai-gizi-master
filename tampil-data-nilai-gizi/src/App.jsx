@@ -80,20 +80,22 @@ export default function App() {
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // PRIMARY: Cloud DB — always try first with cache bypass
+    // PRIMARY: Vercel /api/storage → backed by GitHub (persistent)
     try {
-      const resCloud = await fetch(CLOUD_DB_URL + '?_=' + Date.now(), { cache: 'no-store' })
-      if (resCloud.ok) {
-        const jsonCloud = await resCloud.json()
-        const d = jsonCloud?.data
-        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
-          applyData(d)
-          return
+      const res = await fetch(`${STORAGE_ENDPOINT_FALLBACK}?key=sppg-menu-current&_=${Date.now()}`, { cache: 'no-store' })
+      if (res.ok) {
+        const json = await res.json()
+        if (json.value) {
+          const d = typeof json.value === 'string' ? JSON.parse(json.value) : json.value
+          if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+            applyData(d)
+            return
+          }
         }
       }
     } catch {}
 
-    // FALLBACK 1: Vercel API /api/nilai-gizi
+    // FALLBACK: try /api/nilai-gizi endpoint
     try {
       const res = await fetch(API_URL)
       if (res.ok) {
@@ -105,19 +107,7 @@ export default function App() {
       }
     } catch {}
 
-    // FALLBACK 2: Vercel API /api/storage
-    try {
-      const res2 = await fetch(`${STORAGE_ENDPOINT_FALLBACK}?key=${STORAGE_KEY}`)
-      if (res2.ok) {
-        const json2 = await res2.json()
-        if (json2.value) {
-          applyData(typeof json2.value === 'string' ? JSON.parse(json2.value) : json2.value)
-          return
-        }
-      }
-    } catch {}
-
-    // No data found — show empty state
+    // No data yet — show empty state
     applyData(defaultState())
 
     setLoading(false)
