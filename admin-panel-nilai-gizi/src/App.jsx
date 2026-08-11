@@ -196,9 +196,10 @@ function QRCodeSection({ showToast }) {
       </div>
       <div className="qr-text">
         <b>📱 QR Code Tampilan Publik</b>
-        <span>Scan QR Code ini untuk membuka halaman <strong>tampil-data-nilai-gizi</strong> secara langsung.</span>
+        <span>Scan QR Code ini untuk membuka halaman Nilai Gizi.</span>
         
         <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', display: 'block', marginBottom: '4px' }}>Link Nilai Gizi:</label>
           <span className="qr-url">{PUBLIC_URL}</span>
         </div>
 
