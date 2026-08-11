@@ -185,6 +185,22 @@
 .qr-text { flex: 1; }
 .qr-text b { display: block; font-size: 14px; color: var(--navy); margin-bottom: 4px; }
 .qr-text span { font-size: 12px; color: var(--navy-2); line-height: 1.45; display: block; }
+.qr-url {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  word-break: break-all;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+}
 .qr-actions {
   display: flex;
   flex-wrap: wrap;
