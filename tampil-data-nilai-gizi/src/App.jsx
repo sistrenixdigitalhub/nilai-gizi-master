@@ -298,6 +298,7 @@ export default function App() {
       <footer className="public-footer">
         <p><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
         <p>Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
+        <p style={{marginTop: '10px', fontSize: '0.9em', opacity: 0.8}}>&copy; {new Date().getFullYear()} Afnand Fachzevi</p>
       </footer>
     </div>
   )

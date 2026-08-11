@@ -1,17 +1,24 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 
-const FILE_PATH = path.join('/tmp', 'sppg-data', 'storage.json')
+const FILE_PATH = path.join('/tmp', 'sppg-data', 'menu.json')
 const STORAGE_KEY = 'sppg-menu-current'
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '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'
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || 'sistrenixdigitalhub/nilai-gizi-master'
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'main'
-const GH_FILE_PATH = 'data/menu.json'   // dedicated menu file, no key wrapping
+
+// Increase body size limit for image uploads
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '20mb',
+    },
+  },
+}
 
 const DEFAULT_MENU = {
   date: '',
   title: '',
-  image: '',
   images: [],
   menuItems: [],
   nutrition: {
@@ -23,69 +30,95 @@ const DEFAULT_MENU = {
 }
 
 // ── GITHUB HELPERS ──
-async function ghGet() {
+async function ghHeaders() {
+  return {
+    Authorization: `Bearer ${GITHUB_TOKEN}`,
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'nilai-gizi-sppg',
+    'Cache-Control': 'no-cache',
+    'Content-Type': 'application/json',
+  }
+}
+
+async function ghGetSha(filePath) {
   try {
-    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${GH_FILE_PATH}?t=${Date.now()}`
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'nilai-gizi-sppg',
-        'Cache-Control': 'no-cache',
-      },
-    })
+    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${filePath}`
+    const res = await fetch(url, { headers: await ghHeaders() })
     if (!res.ok) return null
     const json = await res.json()
-    if (!json.content) return null
-    const decoded = Buffer.from(json.content.replace(/\n/g, ''), 'base64').toString('utf-8')
-    return { menu: JSON.parse(decoded), sha: json.sha }
+    return json.sha || null
   } catch {
     return null
   }
 }
 
-async function ghPut(menuObj, sha) {
+async function ghReadJson(filePath) {
   try {
-    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${GH_FILE_PATH}`
-
-    // Refresh sha in case it changed
-    if (!sha) {
-      const check = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'nilai-gizi-sppg',
-        },
-      })
-      if (check.ok) {
-        const ex = await check.json()
-        sha = ex.sha
-      }
-    }
-
-    const content = Buffer.from(JSON.stringify(menuObj, null, 2), 'utf-8').toString('base64')
-    const body = {
-      message: `update menu [${new Date().toISOString()}]`,
-      content,
-      branch: GITHUB_BRANCH,
-    }
-    if (sha) body.sha = sha
-
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'nilai-gizi-sppg',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-    const result = await res.json()
-    return result.content?.sha || null
+    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${filePath}?t=${Date.now()}`
+    const res = await fetch(url, { headers: await ghHeaders() })
+    if (!res.ok) return null
+    const json = await res.json()
+    if (!json.content) return null
+    const decoded = Buffer.from(json.content.replace(/\n/g, ''), 'base64').toString('utf-8')
+    return { data: JSON.parse(decoded), sha: json.sha }
   } catch {
     return null
   }
+}
+
+async function ghWriteFile(filePath, contentBase64, sha, commitMsg) {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${filePath}`
+    if (!sha) sha = await ghGetSha(filePath)
+    const body = {
+      message: commitMsg || `update ${filePath}`,
+      content: contentBase64,
+      branch: GITHUB_BRANCH,
+    }
+    if (sha) body.sha = sha
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: await ghHeaders(),
+      body: JSON.stringify(body),
+    })
+    const result = await res.json()
+    return { ok: res.ok, sha: result.content?.sha || null, error: result.message }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
+// ── Upload each image as a separate file in GitHub ──
+async function uploadImagesToGithub(images) {
+  const urls = []
+  for (let i = 0; i < images.length; i++) {
+    const dataUrl = images[i]
+    if (!dataUrl) continue
+
+    // Parse base64 from data URL
+    const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/)
+    if (!match) { urls.push(dataUrl); continue }
+
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1]
+    const base64Content = match[2]
+    const filePath = `data/images/photo-${i}.${ext}`
+
+    const result = await ghWriteFile(
+      filePath,
+      base64Content,
+      null,
+      `update menu photo ${i}`
+    )
+
+    if (result.ok) {
+      // Use raw GitHub URL for the image
+      urls.push(`https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_BRANCH}/${filePath}?t=${Date.now()}`)
+    } else {
+      // Fallback: keep original data URL if upload failed
+      urls.push(dataUrl)
+    }
+  }
+  return urls
 }
 
 // ── CORS ──
@@ -103,18 +136,18 @@ export default async function handler(req, res) {
   // GET — return current menu
   if (req.method === 'GET') {
     try {
-      const gh = await ghGet()
-      const menu = (gh && gh.menu) ? gh.menu : DEFAULT_MENU
+      const gh = await ghReadJson('data/menu.json')
+      const menu = (gh && gh.data) ? gh.data : DEFAULT_MENU
       return res.status(200).json({
         value: JSON.stringify(menu),
         persistent: true,
       })
     } catch (err) {
-      return res.status(500).json({ error: err.message, persistent: false })
+      return res.status(500).json({ error: err.message })
     }
   }
 
-  // POST — save new menu
+  // POST — save menu (with optional image upload to GitHub)
   if (req.method === 'POST') {
     try {
       let body = req.body
@@ -132,7 +165,7 @@ export default async function handler(req, res) {
         })
       }
 
-      // Accept either { key, value } or direct menu object
+      // Accept { key, value } format
       let menuObj = null
       if (body?.key === STORAGE_KEY && body?.value) {
         menuObj = typeof body.value === 'string' ? JSON.parse(body.value) : body.value
@@ -142,16 +175,39 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing menu data' })
       }
 
-      const gh = await ghGet()
-      await ghPut(menuObj, gh?.sha || null)
+      // Upload images to GitHub as real files, replace base64 with raw URLs
+      if (Array.isArray(menuObj.images) && menuObj.images.length > 0) {
+        const base64Images = menuObj.images.filter(img => img && img.startsWith('data:'))
+        if (base64Images.length > 0) {
+          const uploadedUrls = await uploadImagesToGithub(menuObj.images)
+          menuObj = {
+            ...menuObj,
+            images: uploadedUrls,
+            image: uploadedUrls[0] || '',
+          }
+        }
+      }
 
-      // Also cache to /tmp
+      // Read current sha for menu.json
+      const existing = await ghReadJson('data/menu.json')
+      const sha = existing?.sha || null
+
+      // Save clean menu.json (no base64, just URLs)
+      const menuContent = Buffer.from(JSON.stringify(menuObj, null, 2), 'utf-8').toString('base64')
+      const result = await ghWriteFile('data/menu.json', menuContent, sha, `update menu: ${menuObj.title || 'untitled'}`)
+
+      // Cache to /tmp
       try {
         await fs.mkdir(path.dirname(FILE_PATH), { recursive: true })
         await fs.writeFile(FILE_PATH, JSON.stringify(menuObj, null, 2), 'utf-8')
       } catch {}
 
-      return res.status(200).json({ ok: true, persistent: true })
+      return res.status(200).json({
+        ok: result.ok,
+        persistent: true,
+        imageUrls: menuObj.images,
+        error: result.error,
+      })
     } catch (err) {
       return res.status(500).json({ error: err.message, persistent: false })
     }

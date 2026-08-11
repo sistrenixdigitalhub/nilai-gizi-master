@@ -88,16 +88,14 @@ async function storageSet(key, value) {
     })
     if (res.ok) {
       const json = await res.json().catch(() => ({}))
-      return { ok: true, persistent: json.persistent !== false }
+      return { ok: true, persistent: json.persistent !== false, imageUrls: json.imageUrls }
     }
-  } catch {}
-
-  try {
-    localStorage.setItem(key, value)
-    return { ok: true, persistent: false }
-  } catch {
-    return null
+    // Log error status for debugging
+    console.warn('storageSet failed with status:', res.status)
+  } catch (e) {
+    console.warn('storageSet network error:', e.message)
   }
+  return { ok: false, persistent: false }
 }
 
 async function getAdminCredentials() {
@@ -460,7 +458,7 @@ function EditModal({ state, onSave, onClose }) {
   }
 
   const handleSave = async () => {
-    setStatus({ msg: 'Menyimpan...', ok: true })
+    setStatus({ msg: 'Menyimpan & mengupload foto...', ok: true })
 
     const next = {
       date,
@@ -471,11 +469,22 @@ function EditModal({ state, onSave, onClose }) {
       nutrition,
     }
 
-    // Save to Vercel /api/storage → persists to GitHub as data/menu.json
-    await storageSet(STORAGE_KEY, JSON.stringify(next))
+    // POST to Vercel → server uploads images to GitHub, returns raw URLs
+    const result = await storageSet(STORAGE_KEY, JSON.stringify(next))
 
+    if (!result?.ok) {
+      setStatus({ msg: '❌ Gagal menyimpan. Coba lagi.', ok: false })
+      return
+    }
+
+    // If server returned GitHub raw URLs for images, update local state
+    const finalImages = (result.imageUrls && result.imageUrls.length > 0)
+      ? result.imageUrls
+      : images
+
+    const saved = { ...next, images: finalImages, image: finalImages[0] || '' }
     setStatus({ msg: 'Tersimpan ✓', ok: true })
-    setTimeout(() => { onSave(next); onClose() }, 500)
+    setTimeout(() => { onSave(saved); onClose() }, 500)
   }
 
   return (
@@ -739,6 +748,9 @@ export default function App() {
 
       {consentBanner}
       <Toast message={toast} />
+      <div className="copyright" style={{textAlign: 'center', padding: '20px', fontSize: '14px', color: '#666', marginTop: '20px'}}>
+        &copy; {new Date().getFullYear()} Afnand Fachzevi
+      </div>
     </div>
   )
 }
