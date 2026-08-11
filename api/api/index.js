@@ -47,6 +47,14 @@ async function writeData(data) {
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8')
 }
 
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'API Nilai Gizi SPPG Binawidya Server Running' })
+})
+
+app.get('/api', (req, res) => {
+  res.json({ status: 'ok', message: 'API Nilai Gizi SPPG Binawidya Server Running' })
+})
+
 app.get('/api/nilai-gizi', async (req, res) => {
   try {
     const store = await readData()
