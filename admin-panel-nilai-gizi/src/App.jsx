@@ -156,7 +156,8 @@ function Toast({ message }) {
 
 // ── QR CODE SECTION FOR PUBLIC DISPLAY ──
 function QRCodeSection({ showToast }) {
-  const [publicUrl, setPublicUrl] = useState('')
+  const DEFAULT_PUBLIC_URL = 'https://sppg-binawidya-simpang-baru-7-nilai.vercel.app/'
+  const [publicUrl, setPublicUrl] = useState(DEFAULT_PUBLIC_URL)
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -164,7 +165,7 @@ function QRCodeSection({ showToast }) {
       if (res?.value) {
         setPublicUrl(res.value)
       } else {
-        setPublicUrl('https://sppg-binawidya-simpang-baru-7-nilai.vercel.app')
+        setPublicUrl(DEFAULT_PUBLIC_URL)
       }
     })
   }, [])
@@ -288,38 +289,69 @@ function Topbar({ isAdmin, onLogout, onEdit, onResetPassword }) {
 }
 
 function LoginScreen({ onSuccess }) {
-  const [username, setUsername] = useState(DEFAULT_ADMIN_USERNAME)
-  const [password, setPassword] = useState(DEFAULT_ADMIN_PASSWORD)
-  const [error, setError]       = useState('')
-  const usernameRef             = useRef(null)
+  const [username, setUsername]               = useState('')
+  const [password, setPassword]               = useState('')
+  const [rememberSession, setRememberSession] = useState(true)
+  const [error, setError]                     = useState('')
+  const usernameRef                           = useRef(null)
 
   useEffect(() => { usernameRef.current?.focus() }, [])
 
   const tryLogin = useCallback(async () => {
+    if (!username.trim() || !password) {
+      setError('Harap masukkan username dan password.')
+      return
+    }
     const { username: storedUser, password: storedPass } = await getAdminCredentials()
     if (username.trim() === storedUser && password === storedPass) {
-      setSession()
+      if (rememberSession) {
+        setSession()
+      } else {
+        clearSession()
+      }
       onSuccess()
     } else {
       setError('Username atau password salah. Coba lagi.')
       setPassword('')
       setTimeout(() => usernameRef.current?.focus(), 50)
     }
-  }, [onSuccess, username, password])
+  }, [onSuccess, username, password, rememberSession])
 
   return (
     <div className="login-screen">
       <div className="login-card">
         <img className="login-logo" src="/icon.png" alt="SPPG BINAWIDYA logo" />
         <h1>Admin Login</h1>
-        <p>Masuk untuk mengelola data menu dan nilai gizi harian SPPG Binawidya.</p>
+        <p>Silakan masukkan username dan password untuk mengelola data menu SPPG Binawidya.</p>
         <div className="field">
           <label>Username</label>
-          <input ref={usernameRef} type="text" value={username} onChange={e => setUsername(e.target.value)} />
+          <input
+            ref={usernameRef}
+            type="text"
+            value={username}
+            placeholder="Masukkan username admin"
+            onChange={e => setUsername(e.target.value)}
+          />
         </div>
         <div className="field">
           <label>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+          <input
+            type="password"
+            value={password}
+            placeholder="Masukkan password admin"
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && tryLogin()}
+          />
+        </div>
+        <div className="remember-option" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', margin: '14px 0 10px', fontSize: '13.5px', color: 'var(--navy)' }}>
+          <input
+            type="checkbox"
+            id="remember"
+            checked={rememberSession}
+            onChange={e => setRememberSession(e.target.checked)}
+            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+          />
+          <label htmlFor="remember" style={{ cursor: 'pointer', fontWeight: 600 }}>Simpan sesi login di perangkat ini</label>
         </div>
         {error && <div className="status-msg err">{error}</div>}
         <div className="sheet-actions">
