@@ -3,7 +3,6 @@ import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/nilai-gizi'
 const STORAGE_KEY = 'sppg-menu-current'
-const STORAGE_ENDPOINT_FALLBACK = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
 
 const CATS = [
   { key: 'k1',     label: 'Porsi Kecil',  sub: 'TK/PAUD & SD 1–3' },
@@ -60,6 +59,9 @@ function getPhotoList(state) {
   return []
 }
 
+const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
+const STORAGE_ENDPOINT_FALLBACK = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
+
 export default function App() {
   const [data, setData]             = useState(null)
   const [activeTab, setActiveTab]   = useState('k1')
@@ -68,76 +70,56 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [photoIndex, setPhotoIndex] = useState(0)
 
-const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
+  const applyData = (d) => {
+    setData(d)
+    setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    setLoading(false)
+    setRefreshing(false)
+  }
 
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // 0. Try Cloud Database (Persistent REST store)
+    // PRIMARY: Cloud DB — always try first with cache bypass
     try {
-      const resCloud = await fetch(CLOUD_DB_URL)
+      const resCloud = await fetch(CLOUD_DB_URL + '?_=' + Date.now(), { cache: 'no-store' })
       if (resCloud.ok) {
         const jsonCloud = await resCloud.json()
-        if (jsonCloud && jsonCloud.data && (jsonCloud.data.title || jsonCloud.data.menuItems?.length > 0 || jsonCloud.data.images?.length > 0 || jsonCloud.data.image)) {
-          setData(jsonCloud.data)
-          setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-          setLoading(false)
-          setRefreshing(false)
+        const d = jsonCloud?.data
+        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+          applyData(d)
           return
         }
       }
-    } catch {
-      // Fallback
-    }
+    } catch {}
 
+    // FALLBACK 1: Vercel API /api/nilai-gizi
     try {
-      // 1. Try API /api/nilai-gizi
       const res = await fetch(API_URL)
       if (res.ok) {
         const json = await res.json()
         if (json.success && json.data) {
-          const parsed = typeof json.data === 'string' ? JSON.parse(json.data) : json.data
-          setData(parsed)
-          setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-          setLoading(false)
-          setRefreshing(false)
+          applyData(typeof json.data === 'string' ? JSON.parse(json.data) : json.data)
           return
         }
       }
-    } catch {
-      // API call failed, try localStorage fallback
-    }
+    } catch {}
 
+    // FALLBACK 2: Vercel API /api/storage
     try {
-      // 2. Try generic storage endpoint
       const res2 = await fetch(`${STORAGE_ENDPOINT_FALLBACK}?key=${STORAGE_KEY}`)
       if (res2.ok) {
         const json2 = await res2.json()
         if (json2.value) {
-          const parsed2 = typeof json2.value === 'string' ? JSON.parse(json2.value) : json2.value
-          setData(parsed2)
-          setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-          setLoading(false)
-          setRefreshing(false)
+          applyData(typeof json2.value === 'string' ? JSON.parse(json2.value) : json2.value)
           return
         }
       }
-    } catch {
-      // Fallback
-    }
+    } catch {}
 
-    try {
-      const local = localStorage.getItem(STORAGE_KEY)
-      if (local) {
-        setData(JSON.parse(local))
-      } else {
-        setData(defaultState())
-      }
-    } catch {
-      setData(defaultState())
-    }
+    // No data found — show empty state
+    applyData(defaultState())
 
-    setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }))
     setLoading(false)
     setRefreshing(false)
   }, [])

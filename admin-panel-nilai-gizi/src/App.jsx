@@ -58,6 +58,31 @@ function defaultState() {
   }
 }
 
+// ── CLOUD DB ──
+const CLOUD_DB_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a'
+const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
+
+async function cloudGet() {
+  try {
+    const res = await fetch(CLOUD_DB_URL, { cache: 'no-store' })
+    if (res.ok) {
+      const json = await res.json()
+      return (json && json.data) ? json.data : null
+    }
+  } catch {}
+  return null
+}
+
+async function cloudSet(dataWithoutPhotos) {
+  try {
+    await fetch(CLOUD_DB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'sppg-menu-current', data: dataWithoutPhotos }),
+    })
+  } catch {}
+}
+
 // ── STORAGE HELPERS ──
 const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
 
@@ -68,9 +93,7 @@ async function storageGet(key) {
       const json = await res.json()
       return json.value !== undefined && json.value !== null ? { value: json.value } : null
     }
-  } catch {
-    // ignore remote failure, fallback to localStorage
-  }
+  } catch {}
 
   try {
     const raw = localStorage.getItem(key)
@@ -91,9 +114,7 @@ async function storageSet(key, value) {
       const json = await res.json().catch(() => ({}))
       return { ok: true, persistent: json.persistent !== false }
     }
-  } catch {
-    // ignore remote failure, fallback to localStorage
-  }
+  } catch {}
 
   try {
     localStorage.setItem(key, value)
@@ -151,7 +172,7 @@ function getPhotoList(state) {
   return []
 }
 
-function resizeImage(file, maxWidth = 800) {
+function resizeImage(file, maxWidth = 800, quality = 0.72) {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -162,11 +183,26 @@ function resizeImage(file, maxWidth = 800) {
         canvas.width  = Math.round(img.width  * scale)
         canvas.height = Math.round(img.height * scale)
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', 0.72))
+        resolve(canvas.toDataURL('image/jpeg', quality))
       }
       img.src = e.target.result
     }
     reader.readAsDataURL(file)
+  })
+}
+
+async function resizeImageToThumbnail(dataUrl, maxWidth = 320, quality = 0.55) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width)
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width  * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.src = dataUrl
   })
 }
 
@@ -448,6 +484,9 @@ function EditModal({ state, onSave, onClose }) {
   }
 
   const handleSave = async () => {
+    setStatus({ msg:'Menyimpan...', ok:true })
+
+    // Build full data object (with full-res photos)
     const next = {
       date,
       title: title.trim() || 'Menu SPPG Binawidya 7',
@@ -456,15 +495,31 @@ function EditModal({ state, onSave, onClose }) {
       menuItems: menuText.split('\n').map(s => s.trim()).filter(Boolean),
       nutrition,
     }
-    try {
-      await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'sppg-menu-current', data: next }),
-      })
-    } catch {}
 
-    const ok = await storageSet(STORAGE_KEY, JSON.stringify(next))
+    // Save full photos to localStorage (admin device only)
+    try { localStorage.setItem(PHOTOS_LOCAL_KEY, JSON.stringify(images)) } catch {}
+
+    // Build cloud payload: compress photos to thumbnails to fit Cloud DB
+    let thumbImages = []
+    try {
+      thumbImages = await Promise.all(images.map(url => resizeImageToThumbnail(url, 320, 0.55)))
+    } catch { thumbImages = images }
+
+    const cloudPayload = {
+      date,
+      title: next.title,
+      image: thumbImages[0] || '',
+      images: thumbImages,
+      menuItems: next.menuItems,
+      nutrition,
+    }
+
+    // Save thumbnail version to Cloud DB (for Tampilan Publik)
+    await cloudSet(cloudPayload)
+
+    // Also save full version to Vercel API storage as backup
+    await storageSet(STORAGE_KEY, JSON.stringify(next))
+
     setStatus({ msg:'Tersimpan ✓', ok:true })
     setTimeout(() => { onSave(next); onClose() }, 500)
   }
@@ -558,31 +613,32 @@ export default function App() {
   // Load data on mount
   useEffect(() => {
     const init = async () => {
-      const consent = getCookie('storage_consent') === 'yes'
       const consentState = getCookie('storage_consent')
       setStorageConsent(consentState === 'yes' ? 'yes' : consentState === 'no' ? 'no' : 'unknown')
 
-      try {
-        const resCloud = await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a')
-        if (resCloud.ok) {
-          const jsonCloud = await resCloud.json()
-          if (jsonCloud && jsonCloud.data && (jsonCloud.data.title || jsonCloud.data.menuItems?.length > 0 || jsonCloud.data.images?.length > 0)) {
-            setMenuState(jsonCloud.data)
-            if (checkSession()) setIsAdmin(true)
-            setLoading(false)
-            return
+      // Try Cloud DB first (most up-to-date)
+      const cloudData = await cloudGet()
+      if (cloudData && (cloudData.title || (cloudData.menuItems && cloudData.menuItems.length > 0))) {
+        // Merge cloud text data with local full-res photos if available
+        try {
+          const localPhotos = JSON.parse(localStorage.getItem(PHOTOS_LOCAL_KEY) || '[]')
+          if (localPhotos.length > 0) {
+            setMenuState({ ...cloudData, images: localPhotos, image: localPhotos[0] || '' })
+          } else {
+            setMenuState(cloudData)
           }
+        } catch {
+          setMenuState(cloudData)
         }
-      } catch {}
+        if (checkSession()) setIsAdmin(true)
+        setLoading(false)
+        return
+      }
 
+      // Fallback: try Vercel API storage
       const res = await storageGet(STORAGE_KEY)
       const stored = res?.value ? (typeof res.value === 'string' ? JSON.parse(res.value) : res.value) : null
-      const data = stored || defaultState()
-
-      if (consent && !stored) {
-        await storageSet(STORAGE_KEY, JSON.stringify(data))
-      }
-      setMenuState(data)
+      setMenuState(stored || defaultState())
 
       if (checkSession()) setIsAdmin(true)
       setLoading(false)
@@ -593,9 +649,6 @@ export default function App() {
   const handleAcceptStorage = async () => {
     setCookie('storage_consent', 'yes')
     setStorageConsent('yes')
-    if (menuState) {
-      await storageSet(STORAGE_KEY, JSON.stringify(menuState))
-    }
     showToast('Penyimpanan data diaktifkan.')
   }
 
@@ -632,15 +685,7 @@ export default function App() {
 
   const handleSave = async (next) => {
     setMenuState(next)
-    try {
-      await fetch('https://api.restful-api.dev/objects/ff8081819f7e10ae019ff1980f44280a', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'sppg-menu-current', data: next }),
-      })
-    } catch {}
-    await storageSet(STORAGE_KEY, JSON.stringify(next))
-    showToast('Menu berhasil disimpan ke API & Publik!')
+    showToast('Menu berhasil disimpan & Tampilan Publik diperbarui!')
   }
 
   const photos = getPhotoList(menuState)
