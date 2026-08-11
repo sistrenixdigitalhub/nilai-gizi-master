@@ -1,0 +1,37 @@
+{
+  "date": "",
+  "title": "",
+  "image": "",
+  "images": [],
+  "menuItems": [],
+  "nutrition": {
+    "k1": {
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
+    },
+    "k2": {
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
+    },
+    "balita": {
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
+    },
+    "bumil": {
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
+    }
+  }
+}
