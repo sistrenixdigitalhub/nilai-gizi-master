@@ -1,0 +1,12 @@
+{
+  "name": "nilai-gizi-master",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node start-dev.js",
+    "dev:api": "npm --prefix api start",
+    "dev:admin": "npm --prefix admin-panel-nilai-gizi run dev",
+    "dev:tampil": "npm --prefix tampil-data-nilai-gizi run dev"
+  }
+}

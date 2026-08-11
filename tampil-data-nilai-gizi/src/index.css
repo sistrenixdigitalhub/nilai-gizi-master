@@ -1,0 +1,44 @@
+:root {
+  --navy: #182A52;
+  --navy-2: #2B4270;
+  --gold: #FFD54F;
+  --gold-light: #FFE79A;
+  --gold-accent: #FFA000;
+  --cream: #F7F4EB;
+  --cream-2: #EFEBD9;
+  --white: #FFFFFF;
+  --ink: #101828;
+  --line: #E2DBCC;
+  --green: #2E7D32;
+  --shadow-sm: 0 4px 12px rgba(24, 42, 82, 0.08);
+  --shadow-md: 0 10px 30px rgba(24, 42, 82, 0.12);
+  --shadow-lg: 0 20px 50px rgba(24, 42, 82, 0.18);
+  --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+}

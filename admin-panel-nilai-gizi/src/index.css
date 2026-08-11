@@ -1,0 +1,29 @@
+:root {
+  --cream: #EFE6D6;
+  --cream-2: #E4D8C2;
+  --navy: #182A52;
+  --navy-2: #233A6B;
+  --gold: #C9A24B;
+  --gold-light: #E7CE8C;
+  --ink: #2A2015;
+  --white: #FFFDF8;
+  --line: rgba(24, 42, 82, 0.14);
+  --green: #2D7A4F;
+  --red: #8B1A1A;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(255,255,255,0.5), transparent 60%),
+    linear-gradient(180deg, var(--cream), var(--cream-2));
+  color: var(--ink);
+  min-height: 100vh;
+  padding-bottom: 48px;
+}
+
+button { cursor: pointer; font-family: inherit; }
+input, textarea { font-family: inherit; }
