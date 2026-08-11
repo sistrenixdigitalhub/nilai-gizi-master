@@ -8,6 +8,10 @@ const PIN_KEY     = 'sppg-admin-pin'
 const USER_KEY    = 'sppg-admin-username'
 const DEFAULT_ADMIN_USERNAME = 'adis'
 const DEFAULT_ADMIN_PASSWORD = '2819'
+const BUILTIN_ACCOUNTS = [
+  { username: 'adis',       password: '2819' },
+  { username: 'superadmin', password: '20899' },
+]
 const SESSION_TTL = 2 * 60 * 60 * 1000 // 2 jam
 
 const CATS = [
@@ -106,6 +110,23 @@ async function getAdminCredentials() {
     username: userRes?.value || DEFAULT_ADMIN_USERNAME,
     password: passRes?.value || DEFAULT_ADMIN_PASSWORD,
   }
+}
+
+async function verifyAdminCredentials(inputUser, inputPass) {
+  const u = (inputUser || '').trim()
+  const p = (inputPass || '').trim()
+
+  const matchBuiltin = BUILTIN_ACCOUNTS.find(acc => acc.username === u && acc.password === p)
+  if (matchBuiltin) return true
+
+  const userRes = await storageGet(USER_KEY)
+  const passRes = await storageGet(PIN_KEY)
+  const storedUser = userRes?.value || DEFAULT_ADMIN_USERNAME
+  const storedPass = passRes?.value || DEFAULT_ADMIN_PASSWORD
+
+  if (u === storedUser && p === storedPass) return true
+
+  return false
 }
 
 // ── SESSION ──
@@ -278,8 +299,8 @@ function LoginScreen({ onSuccess }) {
       setError('Harap masukkan username dan password.')
       return
     }
-    const { username: storedUser, password: storedPass } = await getAdminCredentials()
-    if (username.trim() === storedUser && password === storedPass) {
+    const isValid = await verifyAdminCredentials(username, password)
+    if (isValid) {
       if (rememberSession) {
         setSession()
       } else {
