@@ -21,21 +21,15 @@ app.use(express.json({ limit: '10mb' }))
 
 const DEFAULT_DATA = {
   date: new Date().toISOString().slice(0, 10),
-  title: 'Menu Sekolah & B3',
+  title: '',
   image: '',
   images: [],
-  menuItems: [
-    'Nasi putih',
-    'Egg rol katsu dan saus bangkok',
-    'Kacang tanah goreng',
-    'Tumis wortel, kacang panjang dan jagung',
-    'Buah anggur'
-  ],
+  menuItems: [],
   nutrition: {
-    k1: { energi: '450', protein: '15', lemak: '12', karbo: '65', serat: '4' },
-    k2: { energi: '650', protein: '22', lemak: '18', karbo: '90', serat: '6' },
-    balita: { energi: '350', protein: '12', lemak: '10', karbo: '50', serat: '3' },
-    bumil: { energi: '750', protein: '28', lemak: '22', karbo: '105', serat: '8' }
+    k1: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+    k2: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+    balita: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+    bumil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
   }
 }
 

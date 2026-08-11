@@ -41,21 +41,15 @@ function fmtDate(iso) {
 function defaultState() {
   return {
     date: todayIso(),
-    title: 'Menu Sekolah & B3',
+    title: '',
     image: '',
     images: [],
-    menuItems: [
-      'Nasi putih',
-      'Egg rol katsu dan saus bangkok',
-      'Kacang tanah goreng',
-      'Tumis wortel, kacang panjang dan jagung',
-      'Buah anggur',
-    ],
+    menuItems: [],
     nutrition: {
-      k1:     { energi: '450', protein: '15', lemak: '12', karbo: '65', serat: '4' },
-      k2:     { energi: '650', protein: '22', lemak: '18', karbo: '90', serat: '6' },
-      balita: { energi: '350', protein: '12', lemak: '10', karbo: '50', serat: '3' },
-      bumil:  { energi: '750', protein: '28', lemak: '22', karbo: '105', serat: '8' },
+      k1:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      k2:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      balita: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      bumil:  { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
     },
   }
 }
@@ -200,7 +194,7 @@ export default function App() {
       {/* HERO SECTION */}
       <div className="hero">
         <div className="hero-kicker">Today's Menu</div>
-        <h1>{data.title || 'Menu Sekolah & B3'}</h1>
+        <h1>{data.title || 'Belum Ada Judul Menu'}</h1>
         <div className="date-badge">
           📅 {fmtDate(data.date)}
         </div>
@@ -251,12 +245,18 @@ export default function App() {
         <div className="section-line"></div>
       </div>
       <div className="menu-list">
-        {(data.menuItems || []).map((item, idx) => (
-          <div className="menu-item" key={idx}>
-            <div className="menu-icon">{idx + 1}</div>
-            <div>{item}</div>
+        {(data.menuItems || []).length > 0 ? (
+          (data.menuItems || []).map((item, idx) => (
+            <div className="menu-item" key={idx}>
+              <div className="menu-icon">{idx + 1}</div>
+              <div>{item}</div>
+            </div>
+          ))
+        ) : (
+          <div className="menu-item" style={{ justifyContent: 'center', color: 'var(--navy-2)', fontStyle: 'italic', fontWeight: 600 }}>
+            Belum ada menu yang diinput untuk hari ini
           </div>
-        ))}
+        )}
       </div>
 
       {/* NUTRITION SECTION */}

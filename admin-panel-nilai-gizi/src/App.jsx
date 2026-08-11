@@ -41,16 +41,10 @@ function setCookie(name, value, days = 365) {
 function defaultState() {
   return {
     date: todayIso(),
-    title: 'Menu Sekolah & B3',
+    title: '',
     image: '',
     images: [],
-    menuItems: [
-      'Nasi putih',
-      'Egg rol katsu dan saus bangkok',
-      'Kacang tanah goreng',
-      'Tumis wortel, kacang panjang dan jagung',
-      'Buah anggur',
-    ],
+    menuItems: [],
     nutrition: {
       k1:     { energi:'', protein:'', lemak:'', karbo:'', serat:'' },
       k2:     { energi:'', protein:'', lemak:'', karbo:'', serat:'' },
