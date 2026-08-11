@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/nilai-gizi'
+const API_URL = import.meta.env.VITE_API_URL || 'https://sppg-nilai-gizi.vercel.app/api/nilai-gizi'
 const STORAGE_KEY = 'sppg-menu-current'
 
 const CATS = [

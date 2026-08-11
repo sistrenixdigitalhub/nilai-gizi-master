@@ -61,7 +61,7 @@ function defaultState() {
 }
 
 // ── STORAGE HELPERS ──
-const STORAGE_API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/storage'
+const STORAGE_API = import.meta.env.VITE_API_URL || 'https://sppg-nilai-gizi.vercel.app/api/storage'
 
 async function storageGet(key) {
   try {
