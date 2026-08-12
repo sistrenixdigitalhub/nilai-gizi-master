@@ -1,4 +1,4 @@
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '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'
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || 'sistrenixdigitalhub/nilai-gizi-master'
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'main'
 

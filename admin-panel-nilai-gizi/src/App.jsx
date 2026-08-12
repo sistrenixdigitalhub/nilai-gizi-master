@@ -61,8 +61,22 @@ function defaultState() {
 // ── STORAGE HELPERS ──
 const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
 const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
+// Repo is now PUBLIC — read menu.json directly from GitHub (fastest, no cold start)
+const GITHUB_MENU_RAW = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
 
 async function storageGet(key) {
+  // PRIMARY: read directly from public GitHub raw (no token needed)
+  try {
+    const res = await fetch(GITHUB_MENU_RAW + '?_=' + Date.now(), { cache: 'no-store' })
+    if (res.ok) {
+      const menu = await res.json()
+      if (menu && (menu.title !== undefined || menu.menuItems !== undefined)) {
+        return { value: JSON.stringify(menu) }
+      }
+    }
+  } catch {}
+
+  // FALLBACK: Vercel API /api/storage
   try {
     const res = await fetch(`${STORAGE_API}?key=${encodeURIComponent(key)}`)
     if (res.ok) {
@@ -71,12 +85,7 @@ async function storageGet(key) {
     }
   } catch {}
 
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? { value: raw } : null
-  } catch {
-    return null
-  }
+  return null
 }
 
 async function storageSet(key, value) {
@@ -272,7 +281,7 @@ function Topbar({ isAdmin, onLogout, onEdit, onResetPassword }) {
         {isAdmin && (
           <>
             <span className="mode-badge admin">ADMIN</span>
-            <button className="edit-btn" onClick={onEdit}>✎ Edit Menu</button>
+            <button className="edit-btn" onClick={onEdit}>✎ <span className="btn-text">Edit Menu</span></button>
             <div className="admin-actions-wrap">
               <button className="admin-action-btn" onClick={() => setShowAdminActions(prev => !prev)}>
                 ⚙️

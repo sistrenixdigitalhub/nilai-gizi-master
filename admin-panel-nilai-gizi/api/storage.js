@@ -3,7 +3,7 @@ import path from 'path'
 
 const FILE_PATH = path.join('/tmp', 'sppg-data', 'menu.json')
 const STORAGE_KEY = 'sppg-menu-current'
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || ''
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || 'sistrenixdigitalhub/nilai-gizi-master'
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'main'
 // Repo is PUBLIC — images served directly via raw.githubusercontent.com
@@ -114,8 +114,8 @@ async function uploadImagesToGithub(images) {
 
     if (result.ok) {
       // Use raw GitHub URL for the image
-      // Repo is PUBLIC — serve images via raw.githubusercontent.com (no auth needed)
-      urls.push(`${GITHUB_RAW_BASE}/${filePath}`)
+      // Repo is PUBLIC — serve images directly via raw.githubusercontent.com
+      urls.push(`https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_BRANCH}/${filePath}`)
     } else {
       // Fallback: keep original data URL if upload failed
       urls.push(dataUrl)

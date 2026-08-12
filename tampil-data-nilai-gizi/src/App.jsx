@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/nilai-gizi'
@@ -71,6 +71,8 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [photoIndex, setPhotoIndex] = useState(0)
+  const [lightbox, setLightbox]     = useState(null) // index of photo in lightbox, null = closed
+  const lightboxRef = useRef(null)
 
   const applyData = (d) => {
     setData(d)
@@ -137,6 +139,17 @@ export default function App() {
     return () => clearInterval(timer)
   }, [photos.length])
 
+  // Keyboard: ESC closes lightbox, arrow keys navigate
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') setLightbox(null)
+      if (e.key === 'ArrowRight') setLightbox(prev => prev !== null ? (prev + 1) % photos.length : null)
+      if (e.key === 'ArrowLeft')  setLightbox(prev => prev !== null ? (prev - 1 + photos.length) % photos.length : null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [photos.length])
+
   if (loading || !data) {
     return (
       <div className="public-wrap" style={{ textAlign: 'center', paddingTop: '80px' }}>
@@ -198,7 +211,14 @@ export default function App() {
       <div className="photo-card">
         {photos.length > 0 ? (
           <div className="slideshow">
-            <img src={photos[displayIndex]} alt={`Foto Menu ${displayIndex + 1}`} />
+            <img
+              src={photos[displayIndex]}
+              alt={`Foto Menu ${displayIndex + 1}`}
+              onClick={() => setLightbox(displayIndex)}
+              style={{ cursor: 'zoom-in' }}
+              title="Klik untuk perbesar"
+            />
+            <div className="photo-zoom-hint">🔍 Klik foto untuk perbesar</div>
             {photos.length > 1 && (
               <div className="slideshow-controls">
                 <button
@@ -232,6 +252,37 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* LIGHTBOX POPUP */}
+      {lightbox !== null && photos.length > 0 && (
+        <div
+          className="lightbox-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setLightbox(null) }}
+          ref={lightboxRef}
+        >
+          <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="Tutup">
+            ✕
+          </button>
+          <button
+            className="lightbox-nav lightbox-prev"
+            onClick={() => setLightbox(prev => (prev - 1 + photos.length) % photos.length)}
+            aria-label="Foto sebelumnya"
+          >‹</button>
+          <div className="lightbox-img-wrap">
+            <img
+              src={photos[lightbox]}
+              alt={`Foto Menu ${lightbox + 1}`}
+              className="lightbox-img"
+            />
+            <div className="lightbox-counter">{lightbox + 1} / {photos.length}</div>
+          </div>
+          <button
+            className="lightbox-nav lightbox-next"
+            onClick={() => setLightbox(prev => (prev + 1) % photos.length)}
+            aria-label="Foto berikutnya"
+          >›</button>
+        </div>
+      )}
 
       {/* MENU ITEMS SECTION */}
       <div className="section-header">

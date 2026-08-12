@@ -353,9 +353,23 @@
 
 /* ── RESPONSIVE LAYOUT ── */
 @media (max-width: 720px) {
-  .topbar { flex-wrap: wrap; justify-content: center; padding: 14px 14px; gap: 10px; }
-  .header-actions { width: 100%; justify-content: center; }
-  .brand { justify-content: center; }
+  .topbar {
+    padding: 10px 14px;
+    gap: 8px;
+    /* Keep single row: brand left, actions right — NO wrap */
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .brand { flex-shrink: 0; }
+  .brand-logo { width: 34px; height: 34px; }
+  .brand-names b { font-size: 12px; }
+  .brand-names span { font-size: 10px; }
+  .header-actions { gap: 6px; flex-shrink: 0; }
+  .mode-badge { font-size: 9px; padding: 3px 6px; }
+  .edit-btn, .login-btn, .reset-btn, .admin-action-btn {
+    padding: 7px 10px;
+    font-size: 11.5px;
+  }
   .wrap { padding: 0 14px 30px; }
   .hero { padding-top: 18px; }
   .hero-kicker { font-size: 22px; }
@@ -368,14 +382,24 @@
   .nutri-card { padding: 14px; }
   .qr-card { flex-direction: column; text-align: center; }
   .qr-actions { justify-content: center; }
-  .admin-actions-wrap { width: 100%; display: flex; justify-content: center; }
-  .admin-action-menu { right: 50%; left: auto; transform: translateX(50%); }
+  .admin-actions-wrap { position: relative; }
+  .admin-action-menu { right: 0; left: auto; transform: none; }
   .photo-preview-grid { grid-template-columns: 1fr 1fr; }
   .edit-sheet { max-width: 100%; border-radius: 18px 18px 0 0; padding: 18px 16px 24px; }
 }
 
 @media (max-width: 520px) {
-  .topbar { padding: 12px 12px; }
+  .topbar { padding: 9px 12px; }
+  .brand-logo { width: 30px; height: 30px; }
+  .brand-names b { font-size: 11px; }
+  .brand-names span { font-size: 9.5px; }
+  .edit-btn, .login-btn, .reset-btn, .admin-action-btn {
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+  /* Hide Edit Menu text on very small screens, show icon only */
+  .edit-btn .btn-text { display: none; }
+  .mode-badge { display: none; }
   .edit-sheet { padding: 16px 14px 22px; }
   .hero-kicker { font-size: 20px; }
   .hero h1 { font-size: 17px; }
