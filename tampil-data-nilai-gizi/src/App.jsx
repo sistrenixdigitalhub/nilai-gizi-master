@@ -84,19 +84,7 @@ export default function App() {
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // PRIMARY: Read directly from GitHub raw (fastest, no Vercel cold start)
-    try {
-      const res = await fetch(GITHUB_RAW_URL + '?_=' + Date.now(), { cache: 'no-store' })
-      if (res.ok) {
-        const d = await res.json()
-        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
-          applyData(d)
-          return
-        }
-      }
-    } catch {}
-
-    // FALLBACK: Vercel /api/storage (which reads from GitHub)
+    // PRIMARY: Vercel API (reads from GitHub API = always fresh, no CDN cache)
     try {
       const res = await fetch(`${STORAGE_ENDPOINT}?_=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
@@ -107,6 +95,18 @@ export default function App() {
             applyData(d)
             return
           }
+        }
+      }
+    } catch {}
+
+    // FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
+    try {
+      const res = await fetch(GITHUB_RAW_URL + '?_=' + Date.now(), { cache: 'no-store' })
+      if (res.ok) {
+        const d = await res.json()
+        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+          applyData(d)
+          return
         }
       }
     } catch {}

@@ -65,7 +65,16 @@ const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
 const GITHUB_MENU_RAW = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
 
 async function storageGet(key) {
-  // PRIMARY: read directly from public GitHub raw (no token needed)
+  // PRIMARY: Vercel API (reads from GitHub API = always fresh, no CDN cache)
+  try {
+    const res = await fetch(`${STORAGE_API}?key=${encodeURIComponent(key)}&_=${Date.now()}`, { cache: 'no-store' })
+    if (res.ok) {
+      const json = await res.json()
+      return json.value !== undefined && json.value !== null ? { value: json.value } : null
+    }
+  } catch {}
+
+  // FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
   try {
     const res = await fetch(GITHUB_MENU_RAW + '?_=' + Date.now(), { cache: 'no-store' })
     if (res.ok) {
@@ -73,15 +82,6 @@ async function storageGet(key) {
       if (menu && (menu.title !== undefined || menu.menuItems !== undefined)) {
         return { value: JSON.stringify(menu) }
       }
-    }
-  } catch {}
-
-  // FALLBACK: Vercel API /api/storage
-  try {
-    const res = await fetch(`${STORAGE_API}?key=${encodeURIComponent(key)}`)
-    if (res.ok) {
-      const json = await res.json()
-      return json.value !== undefined && json.value !== null ? { value: json.value } : null
     }
   } catch {}
 
