@@ -1,46 +1,22 @@
 {
   "date": "2026-08-12",
-  "title": "Kentang Goreng + Chicken Steak Krispy Saus BBQ + Steam Buncis dan Wortel + Buah Semangka",
-  "image": "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
-  "images": [
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-1.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-3.jpg"
-  ],
+  "title": "Test Write 2026-08-12T09:31:26.736Z",
+  "images": [],
   "menuItems": [
-    "Kentang Goreng",
-    "Chicken Steak Krispy Saus BBQ",
-    "Steam Buncis dan Wortel",
-    "Buah Semangka"
+    "Test Item"
   ],
   "nutrition": {
     "k1": {
-      "energi": "409.6",
-      "protein": "15.4",
-      "lemak": "25.7",
-      "karbo": "31.7",
-      "serat": "1.3"
+      "energi": "100"
     },
     "k2": {
-      "energi": "503.6",
-      "protein": "20.3",
-      "lemak": "30.9",
-      "karbo": "39.1",
-      "serat": "1.7"
+      "energi": "200"
     },
     "balita": {
-      "energi": "397.2",
-      "protein": "14.9",
-      "lemak": "25.7",
-      "karbo": "29",
-      "serat": "1.2"
+      "energi": "150"
     },
     "bumil": {
-      "energi": "534.6",
-      "protein": "21.3",
-      "lemak": "31",
-      "karbo": "45.9",
-      "serat": "2"
+      "energi": "250"
     }
   }
 }
