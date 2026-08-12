@@ -1,8 +1,11 @@
 {
   "date": "2026-08-12",
   "title": "Kentang Goreng + Chicken Steak Krispy Saus BBQ + Steam Buncis dan Wortel + Buah Semangka",
-  "image": "",
-  "images": [],
+  "image": "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
+  "images": [
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-1.jpg"
+  ],
   "menuItems": [
     "Kentang Goreng",
     "Chicken Steak Krispy Saus BBQ",
