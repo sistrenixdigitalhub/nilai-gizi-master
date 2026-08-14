@@ -1,46 +1,48 @@
 {
   "date": "2026-08-12",
-  "title": "Kentang Goreng + Chicken Steak Krispy Saus BBQ + Steam Buncis dan Wortel + Buah Semangka",
+  "title": "Nasi Putih + Telur Bumbu Kari + Tempe Goreng Tepung + Acar Timun dan Wortel + Susu Plain",
   "image": "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
   "images": [
     "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-1.jpg",
     "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-2.jpg",
     "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-3.jpg"
   ],
   "menuItems": [
-    "Kentang Goreng",
-    "Chicken Steak Krispy Saus BBQ",
-    "Steam Buncis dan Wortel",
-    "Buah Semangka"
+    "Nasi Putih",
+    "Telur Bumbu Kari",
+    "Tempe Goreng Tepung",
+    "Acar Timun dan Wortel",
+    "Susu Plain"
   ],
   "nutrition": {
     "k1": {
-      "energi": "409.6",
-      "protein": "15.4",
-      "lemak": "25.7",
-      "karbo": "31.7",
-      "serat": "1.3"
+      "energi": "528.4",
+      "protein": "19.7",
+      "lemak": "22.6",
+      "karbo": "61",
+      "serat": "0.8"
     },
     "k2": {
-      "energi": "742.4",
-      "protein": "19",
-      "lemak": "26.3",
-      "karbo": "105.5",
-      "serat": "7.3"
+      "energi": "620.6",
+      "protein": "21.2",
+      "lemak": "22.8",
+      "karbo": "81.3",
+      "serat": "1"
     },
     "balita": {
-      "energi": "409.6",
-      "protein": "15.4",
-      "lemak": "25.7",
-      "karbo": "31.7",
-      "serat": "1.3"
+      "energi": "492.4",
+      "protein": "19.1",
+      "lemak": "22.5",
+      "karbo": "53",
+      "serat": "0.8"
     },
     "bumil": {
-      "energi": "534.6",
-      "protein": "21.3",
-      "lemak": "31",
-      "karbo": "45.9",
-      "serat": "2"
+      "energi": "710.6",
+      "protein": "22.7",
+      "lemak": "22.9",
+      "karbo": "101.2",
+      "serat": "1.1"
     }
   }
 }
