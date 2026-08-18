@@ -226,7 +226,7 @@ export default function App() {
       })
     } catch (e) {
       console.warn('Firestore snapshot init error:', e)
-      void fetchData(false)
+      void (async () => { await fetchData(false) })()
     }
 
     // Secondary Polling interval (every 30 seconds for fallback redundancy)
