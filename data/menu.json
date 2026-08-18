@@ -15,7 +15,6 @@
     "Sayur Kentang dan Wortel",
     "Buah Jeruk"
   ],
-  "savedAt": "2026-08-18T05:48:40.000Z",
   "nutrition": {
     "k1": {
       "energi": "521.9",
@@ -45,5 +44,6 @@
       "karbo": "98.9",
       "serat": "2.6"
     }
-  }
+  },
+  "savedAt": "2026-08-18T08:16:30.301Z"
 }
