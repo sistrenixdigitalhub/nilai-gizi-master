@@ -1,38 +1,49 @@
 {
-  "date": "",
-  "title": "",
-  "image": "",
-  "images": [],
-  "menuItems": [],
-  "savedAt": null,
+  "date": "2026-08-18",
+  "title": "Nasi Putih + Sup Ayam dan Cabe Merah + Tempe Goreng + Sayur Kentang dan Wortel + Buah Jeruk",
+  "image": "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
+  "images": [
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-1.jpg",
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-2.jpg",
+    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-3.jpg"
+  ],
+  "menuItems": [
+    "Nasi Putih",
+    "Sup Ayam dan Cabe Merah",
+    "Tempe Goreng",
+    "Sayur Kentang dan Wortel",
+    "Buah Jeruk"
+  ],
+  "savedAt": "2026-08-18T05:48:40.000Z",
   "nutrition": {
     "k1": {
-      "energi": "",
-      "protein": "",
-      "lemak": "",
-      "karbo": "",
-      "serat": ""
+      "energi": "521.9",
+      "protein": "16.9",
+      "lemak": "25.3",
+      "karbo": "58",
+      "serat": "2.3"
     },
     "k2": {
-      "energi": "",
-      "protein": "",
-      "lemak": "",
-      "karbo": "",
-      "serat": ""
+      "energi": "676.4",
+      "protein": "22.2",
+      "lemak": "30.5",
+      "karbo": "79",
+      "serat": "2.5"
     },
     "balita": {
-      "energi": "",
-      "protein": "",
-      "lemak": "",
-      "karbo": "",
-      "serat": ""
+      "energi": "485.9",
+      "protein": "16.3",
+      "lemak": "25.3",
+      "karbo": "50",
+      "serat": "2.3"
     },
     "bumil": {
-      "energi": "",
-      "protein": "",
-      "lemak": "",
-      "karbo": "",
-      "serat": ""
+      "energi": "766.4",
+      "protein": "23.7",
+      "lemak": "30.7",
+      "karbo": "98.9",
+      "serat": "2.6"
     }
   }
 }
