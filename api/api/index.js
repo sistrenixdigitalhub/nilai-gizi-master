@@ -6,28 +6,37 @@ import path from 'path'
 const app = express()
 const DATA_FILE = path.join('/tmp', 'sppg-data', 'storage.json')
 const STORAGE_KEY = 'sppg-menu-current'
+const DATA_TTL_MS = 24 * 60 * 60 * 1000
 
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 
-const DEFAULT_DATA = {
-  date: new Date().toISOString().slice(0, 10),
-  title: 'Menu Sekolah & B3',
-  image: '',
-  images: [],
-  menuItems: [
-    'Nasi putih',
-    'Egg rol katsu dan saus bangkok',
-    'Kacang tanah goreng',
-    'Tumis wortel, kacang panjang dan jagung',
-    'Buah anggur'
-  ],
-  nutrition: {
-    k1: { energi: '450', protein: '15', lemak: '12', karbo: '65', serat: '4' },
-    k2: { energi: '650', protein: '22', lemak: '18', karbo: '90', serat: '6' },
-    balita: { energi: '350', protein: '12', lemak: '10', karbo: '50', serat: '3' },
-    bumil: { energi: '750', protein: '28', lemak: '22', karbo: '105', serat: '8' }
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getDefaultData() {
+  return {
+    date: todayIso(),
+    title: '',
+    image: '',
+    images: [],
+    menuItems: [],
+    savedAt: null,
+    nutrition: {
+      k1: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      k2: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      balita: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      bumil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
+    }
   }
+}
+
+function isExpired(menu) {
+  if (!menu) return false
+  if (menu.date && menu.date !== todayIso()) return true
+  if (menu.savedAt && Date.now() - new Date(menu.savedAt).getTime() > DATA_TTL_MS) return true
+  return false
 }
 
 async function readData() {
@@ -36,7 +45,7 @@ async function readData() {
     return JSON.parse(raw || '{}')
   } catch {
     await fs.mkdir(path.dirname(DATA_FILE), { recursive: true })
-    const initial = { [STORAGE_KEY]: DEFAULT_DATA }
+    const initial = { [STORAGE_KEY]: getDefaultData() }
     await fs.writeFile(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8')
     return initial
   }
@@ -58,8 +67,11 @@ app.get('/api', (req, res) => {
 app.get('/api/nilai-gizi', async (req, res) => {
   try {
     const store = await readData()
-    const val = store[STORAGE_KEY] || DEFAULT_DATA
-    res.json({ success: true, data: val })
+    let val = store[STORAGE_KEY] || getDefaultData()
+    if (isExpired(val)) {
+      val = { ...getDefaultData(), expired: true }
+    }
+    res.json({ success: true, data: val, expired: isExpired(val) })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }
@@ -72,9 +84,13 @@ app.post('/api/nilai-gizi', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Data tidak boleh kosong' })
     }
     const store = await readData()
-    store[STORAGE_KEY] = newData
+    const stampedData = {
+      ...newData,
+      savedAt: new Date().toISOString()
+    }
+    store[STORAGE_KEY] = stampedData
     await writeData(store)
-    res.json({ success: true, message: 'Data berhasil disimpan', data: newData })
+    res.json({ success: true, message: 'Data berhasil disimpan', data: stampedData })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }
@@ -84,8 +100,15 @@ app.get('/api/storage', async (req, res) => {
   const key = req.query.key || STORAGE_KEY
   try {
     const store = await readData()
-    const val = store[key] ?? (key === STORAGE_KEY ? DEFAULT_DATA : null)
-    res.json({ value: typeof val === 'object' && val !== null ? JSON.stringify(val) : val, persistent: true })
+    let val = store[key] ?? (key === STORAGE_KEY ? getDefaultData() : null)
+    if (key === STORAGE_KEY && isExpired(val)) {
+      val = { ...getDefaultData(), expired: true }
+    }
+    res.json({
+      value: typeof val === 'object' && val !== null ? JSON.stringify(val) : val,
+      persistent: true,
+      expired: key === STORAGE_KEY ? isExpired(store[key]) : false
+    })
   } catch (err) {
     res.status(500).json({ error: err.message, persistent: false })
   }
@@ -106,9 +129,13 @@ app.post('/api/storage', async (req, res) => {
         parsedValue = value
       }
     }
+    if (parsedValue && typeof parsedValue === 'object') {
+      parsedValue.savedAt = new Date().toISOString()
+    }
     store[key] = parsedValue
     await writeData(store)
-    res.json({ ok: true, persistent: true })
+    const imageUrls = parsedValue?.images || []
+    res.json({ ok: true, persistent: true, imageUrls, savedAt: parsedValue?.savedAt })
   } catch (err) {
     res.status(500).json({ error: err.message, persistent: false })
   }

@@ -12,7 +12,8 @@ const BUILTIN_ACCOUNTS = [
   { username: 'adis',       password: '2819' },
   { username: 'superadmin', password: '20899' },
 ]
-const SESSION_TTL = 2 * 60 * 60 * 1000 // 2 jam
+const SESSION_TTL  = 2 * 60 * 60 * 1000  // 2 jam
+const DATA_TTL_MS  = 24 * 60 * 60 * 1000 // 24 jam
 
 const CATS = [
   { key: 'k1',     label: 'Porsi Kecil (TK/PAUD & SD 1–3)' },
@@ -49,6 +50,7 @@ function defaultState() {
     image: '',
     images: [],
     menuItems: [],
+    savedAt: null,
     nutrition: {
       k1:     { energi:'', protein:'', lemak:'', karbo:'', serat:'' },
       k2:     { energi:'', protein:'', lemak:'', karbo:'', serat:'' },
@@ -58,10 +60,18 @@ function defaultState() {
   }
 }
 
+// Returns true if menu data is expired:
+// - date is not today (catches old data without savedAt), OR
+// - savedAt exists and is older than 24h
+function isDataExpired(menu) {
+  if (!menu) return false
+  if (menu.date && menu.date !== todayIso()) return true
+  if (menu.savedAt && Date.now() - new Date(menu.savedAt).getTime() > DATA_TTL_MS) return true
+  return false
+}
+
 // ── STORAGE HELPERS ──
 const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
-const PHOTOS_LOCAL_KEY = 'sppg-menu-photos'
-// Repo is now PUBLIC — read menu.json directly from GitHub (fastest, no cold start)
 const GITHUB_MENU_RAW = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
 
 async function storageGet(key) {
@@ -72,7 +82,9 @@ async function storageGet(key) {
       const json = await res.json()
       return json.value !== undefined && json.value !== null ? { value: json.value } : null
     }
-  } catch {}
+  } catch (err) {
+    void err
+  }
 
   // FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
   try {
@@ -83,7 +95,9 @@ async function storageGet(key) {
         return { value: JSON.stringify(menu) }
       }
     }
-  } catch {}
+  } catch (err) {
+    void err
+  }
 
   return null
 }
@@ -97,9 +111,8 @@ async function storageSet(key, value) {
     })
     if (res.ok) {
       const json = await res.json().catch(() => ({}))
-      return { ok: true, persistent: json.persistent !== false, imageUrls: json.imageUrls }
+      return { ok: true, persistent: json.persistent !== false, imageUrls: json.imageUrls, savedAt: json.savedAt }
     }
-    // Log error status for debugging
     console.warn('storageSet failed with status:', res.status)
   } catch (e) {
     console.warn('storageSet network error:', e.message)
@@ -128,9 +141,7 @@ async function verifyAdminCredentials(inputUser, inputPass) {
   const storedUser = userRes?.value || DEFAULT_ADMIN_USERNAME
   const storedPass = passRes?.value || DEFAULT_ADMIN_PASSWORD
 
-  if (u === storedUser && p === storedPass) return true
-
-  return false
+  return u === storedUser && p === storedPass
 }
 
 // ── SESSION ──
@@ -149,9 +160,16 @@ function fmtDate(iso) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' })
 }
 
+// Add cache-busting to GitHub raw URLs to avoid stale CDN images
+function bustCache(url) {
+  if (!url || url.startsWith('data:')) return url
+  const cleanUrl = url.split('?')[0]
+  return `${cleanUrl}?t=${Date.now()}`
+}
+
 function getPhotoList(state) {
-  if (Array.isArray(state?.images) && state.images.length > 0) return state.images
-  if (state?.image) return [state.image]
+  if (Array.isArray(state?.images) && state.images.length > 0) return state.images.map(bustCache)
+  if (state?.image) return [bustCache(state.image)]
   return []
 }
 
@@ -171,21 +189,6 @@ function resizeImage(file, maxWidth = 800, quality = 0.72) {
       img.src = e.target.result
     }
     reader.readAsDataURL(file)
-  })
-}
-
-async function resizeImageToThumbnail(dataUrl, maxWidth = 320, quality = 0.55) {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width)
-      const canvas = document.createElement('canvas')
-      canvas.width  = Math.round(img.width  * scale)
-      canvas.height = Math.round(img.height * scale)
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-      resolve(canvas.toDataURL('image/jpeg', quality))
-    }
-    img.src = dataUrl
   })
 }
 
@@ -309,6 +312,7 @@ function LoginScreen({ onSuccess }) {
   const [password, setPassword]               = useState('')
   const [rememberSession, setRememberSession] = useState(true)
   const [error, setError]                     = useState('')
+  const [loggingIn, setLoggingIn]             = useState(false)
   const usernameRef                           = useRef(null)
 
   useEffect(() => { usernameRef.current?.focus() }, [])
@@ -318,7 +322,10 @@ function LoginScreen({ onSuccess }) {
       setError('Harap masukkan username dan password.')
       return
     }
+    setLoggingIn(true)
+    setError('')
     const isValid = await verifyAdminCredentials(username, password)
+    setLoggingIn(false)
     if (isValid) {
       if (rememberSession) {
         setSession()
@@ -347,6 +354,7 @@ function LoginScreen({ onSuccess }) {
             value={username}
             placeholder="Masukkan username admin"
             onChange={e => setUsername(e.target.value)}
+            disabled={loggingIn}
           />
         </div>
         <div className="field">
@@ -357,6 +365,7 @@ function LoginScreen({ onSuccess }) {
             placeholder="Masukkan password admin"
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && tryLogin()}
+            disabled={loggingIn}
           />
         </div>
         <div className="remember-option" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', margin: '14px 0 10px', fontSize: '13.5px', color: 'var(--navy)' }}>
@@ -371,7 +380,9 @@ function LoginScreen({ onSuccess }) {
         </div>
         {error && <div className="status-msg err">{error}</div>}
         <div className="sheet-actions">
-          <button className="btn primary" onClick={tryLogin}>Masuk</button>
+          <button className="btn primary" onClick={tryLogin} disabled={loggingIn}>
+            {loggingIn ? '⏳ Memverifikasi...' : 'Masuk'}
+          </button>
         </div>
       </div>
     </div>
@@ -442,19 +453,30 @@ function PasswordModal({ onClose }) {
 
 // ── EDIT MODAL ──
 function EditModal({ state, onSave, onClose }) {
-  const [date,      setDate]      = useState(state.date)
-  const [title,     setTitle]     = useState(state.title)
-  const [menuText,  setMenuText]  = useState((state.menuItems||[]).join('\n'))
-  const [images,    setImages]    = useState(getPhotoList(state))
-  const [nutrition, setNutrition] = useState(JSON.parse(JSON.stringify(state.nutrition)))
-  const [status,    setStatus]    = useState({ msg:'', ok:true })
+  const expired = isDataExpired(state)
+  const baseState = expired ? defaultState() : (state || defaultState())
+  // Date always defaults to today
+  const [date,      setDate]      = useState(todayIso())
+  const [title,     setTitle]     = useState(baseState.title || '')
+  const [menuText,  setMenuText]  = useState((baseState.menuItems||[]).join('\n'))
+  // For images: strip cache-busting query params so we can compare/display properly
+  const [images,    setImages]    = useState(
+    (Array.isArray(baseState?.images) && baseState.images.length > 0)
+      ? baseState.images.map(u => u ? u.split('?')[0] : u)
+      : baseState?.image ? [baseState.image.split('?')[0]] : []
+  )
+  const [nutrition, setNutrition] = useState(JSON.parse(JSON.stringify(baseState.nutrition || defaultState().nutrition)))
+  const [status,    setStatus]    = useState({ msg:'', ok:true, loading: false })
   const fileRef = useRef()
 
   const handleFile = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
+    setStatus({ msg: `Memproses ${files.length} foto...`, ok: true, loading: true })
+    // Replace ALL existing images with new ones (clear old, set new)
     const dataUrls = await Promise.all(files.map(file => resizeImage(file, 800)))
-    setImages(prev => [...prev, ...dataUrls])
+    setImages(dataUrls)
+    setStatus({ msg: '', ok: true, loading: false })
     e.target.value = ''
   }
 
@@ -467,10 +489,10 @@ function EditModal({ state, onSave, onClose }) {
   }
 
   const handleSave = async () => {
-    setStatus({ msg: 'Menyimpan & mengupload foto...', ok: true })
+    setStatus({ msg: '⏳ Menyimpan & mengupload foto...', ok: true, loading: true })
 
     const next = {
-      date,
+      date,          // always today's date (auto)
       title: title.trim() || 'Menu SPPG Binawidya 7',
       image: images[0] || '',
       images,
@@ -478,32 +500,40 @@ function EditModal({ state, onSave, onClose }) {
       nutrition,
     }
 
-    // POST to Vercel → server uploads images to GitHub, returns raw URLs
     const result = await storageSet(STORAGE_KEY, JSON.stringify(next))
 
     if (!result?.ok) {
-      setStatus({ msg: '❌ Gagal menyimpan. Coba lagi.', ok: false })
+      setStatus({ msg: '❌ Gagal menyimpan. Periksa koneksi & coba lagi.', ok: false, loading: false })
       return
     }
 
-    // If server returned GitHub raw URLs for images, update local state
+    // Use server-returned image URLs (after upload to GitHub) if available
     const finalImages = (result.imageUrls && result.imageUrls.length > 0)
       ? result.imageUrls
       : images
 
-    const saved = { ...next, images: finalImages, image: finalImages[0] || '' }
-    setStatus({ msg: 'Tersimpan ✓', ok: true })
-    setTimeout(() => { onSave(saved); onClose() }, 500)
+    const saved = {
+      ...next,
+      images: finalImages,
+      image: finalImages[0] || '',
+      savedAt: result.savedAt || new Date().toISOString(),
+    }
+
+    setImages(finalImages)
+    setStatus({ msg: '✅ Tersimpan! Memperbarui tampilan...', ok: true, loading: false })
+
+    // Brief delay so the user sees the success message, then close & update
+    setTimeout(() => { onSave(saved); onClose() }, 800)
   }
 
   return (
-    <div className="edit-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="edit-overlay" onClick={e => e.target===e.currentTarget && !status.loading && onClose()}>
       <div className="edit-sheet">
         <h2>✎ Edit Menu Hari Ini</h2>
         <p className="sub">Perubahan akan langsung tersimpan ke API & memperbarui tampilan publik.</p>
 
         <div className="field">
-          <label>Tanggal Menu</label>
+          <label>Tanggal Menu <span style={{color:'var(--navy-2)',fontSize:'11px',fontWeight:400}}>(otomatis hari ini)</span></label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} />
         </div>
         <div className="field">
@@ -512,14 +542,21 @@ function EditModal({ state, onSave, onClose }) {
         </div>
         <div className="field">
           <label>Foto Menu</label>
-          <div className="upload-zone" onClick={() => fileRef.current.click()}>
-            <div className="hint">Pilih beberapa foto. Minimal 2 foto akan membuat slideshow otomatis.</div>
+          <div className="upload-zone" onClick={() => !status.loading && fileRef.current.click()}>
+            <div className="hint">
+              Pilih foto baru untuk <strong>mengganti semua foto lama</strong>. Minimal 2 foto = slideshow otomatis.
+            </div>
             {images.length > 0 ? (
               <div className="photo-preview-grid">
                 {images.map((src, idx) => (
                   <div className="photo-preview-item" key={`${src}-${idx}`}>
                     <img src={src} alt={`preview-${idx + 1}`} />
-                    <button type="button" className="photo-remove-btn" onClick={(e) => { e.stopPropagation(); removeImage(idx) }}>
+                    <button
+                      type="button"
+                      className="photo-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); removeImage(idx) }}
+                      disabled={status.loading}
+                    >
                       ✕
                     </button>
                   </div>
@@ -528,7 +565,14 @@ function EditModal({ state, onSave, onClose }) {
             ) : (
               <div className="photo-empty-inline">Belum ada foto</div>
             )}
-            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display:'none' }} onChange={handleFile} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display:'none' }}
+              onChange={handleFile}
+            />
           </div>
         </div>
         <div className="field">
@@ -548,6 +592,7 @@ function EditModal({ state, onSave, onClose }) {
                       type="text" inputMode="decimal"
                       value={nutrition[cat.key]?.[f.key] || ''}
                       onChange={e => handleNutri(cat.key, f.key, e.target.value)}
+                      disabled={status.loading}
                     />
                   </div>
                 ))}
@@ -557,11 +602,43 @@ function EditModal({ state, onSave, onClose }) {
         </div>
 
         <div className="sheet-actions">
-          <button className="btn ghost" onClick={onClose}>Batal</button>
-          <button className="btn primary" onClick={handleSave}>💾 Simpan</button>
+          <button className="btn ghost" onClick={onClose} disabled={status.loading}>Batal</button>
+          <button className="btn primary" onClick={handleSave} disabled={status.loading}>
+            {status.loading ? '⏳ Menyimpan...' : '💾 Simpan'}
+          </button>
         </div>
-        {status.msg && <div className={`status-msg ${status.ok?'ok':'err'}`}>{status.msg}</div>}
+        {status.msg && (
+          <div className={`status-msg ${status.ok ? 'ok' : 'err'}`} style={{ marginTop: '12px', textAlign: 'center' }}>
+            {status.msg}
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+// ── EXPIRED BANNER ──
+function ExpiredBanner({ onEdit }) {
+  return (
+    <div style={{
+      background: '#fff3cd',
+      border: '1px solid #ffc107',
+      borderRadius: '14px',
+      padding: '16px 20px',
+      margin: '16px 0',
+      textAlign: 'center',
+      color: '#856404',
+      fontWeight: 600,
+      fontSize: '14px',
+    }}>
+      ⚠️ Data menu sudah lebih dari 24 jam dan tidak ditampilkan kepada publik.
+      <br />
+      <button
+        style={{ marginTop: '10px', background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+        onClick={onEdit}
+      >
+        ✎ Input Menu Hari Ini
+      </button>
     </div>
   )
 }
@@ -572,14 +649,14 @@ export default function App() {
   const [activeTab,      setActiveTab]      = useState('k1')
   const [isAdmin,        setIsAdmin]        = useState(false)
   const [modal,          setModal]          = useState(null) // 'edit' | 'password' | null
-  const [storageConsent, setStorageConsent] = useState('unknown') // 'yes' | 'no' | 'unknown'
+  const [storageConsent, setStorageConsent] = useState('unknown')
   const [toast,          setToast]          = useState('')
   const [loading,        setLoading]        = useState(true)
   const [photoIndex,     setPhotoIndex]     = useState(0)
 
   const showToast = (msg) => {
     setToast(msg)
-    setTimeout(() => setToast(''), 2500)
+    setTimeout(() => setToast(''), 3000)
   }
 
   // Load data on mount
@@ -588,18 +665,20 @@ export default function App() {
       const consentState = getCookie('storage_consent')
       setStorageConsent(consentState === 'yes' ? 'yes' : consentState === 'no' ? 'no' : 'unknown')
 
-      // Load from Vercel API (backed by GitHub data/menu.json)
       const res = await storageGet(STORAGE_KEY)
       if (res?.value) {
         try {
           const stored = typeof res.value === 'string' ? JSON.parse(res.value) : res.value
-          if (stored && (stored.title || stored.menuItems?.length > 0)) {
+          if (stored && (stored.title || stored.menuItems?.length > 0 || stored.images?.length > 0)) {
+            // Check expiry — if expired, load state but mark as expired (admin can still see it)
             setMenuState(stored)
             if (checkSession()) setIsAdmin(true)
             setLoading(false)
             return
           }
-        } catch {}
+        } catch (err) {
+          void err
+        }
       }
 
       setMenuState(defaultState())
@@ -646,12 +725,15 @@ export default function App() {
     </div>
   ) : null
 
-  const handleSave = async (next) => {
+  const handleSave = (next) => {
     setMenuState(next)
-    showToast('Menu berhasil disimpan & Tampilan Publik diperbarui!')
+    setPhotoIndex(0)
+    showToast('✅ Menu berhasil disimpan & Tampilan Publik diperbarui!')
   }
 
-  const photos = getPhotoList(menuState)
+  const expired = isDataExpired(menuState)
+  // Photos: if expired, don't show old photos in the admin slideshow
+  const photos = expired ? [] : getPhotoList(menuState)
 
   useEffect(() => {
     if (photos.length < 2) return
@@ -661,7 +743,12 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [photos.length])
 
-  if (loading || !menuState) return <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--navy-2)', fontWeight:600 }}>Memuat Panel Admin...</div>
+  if (loading || !menuState) return (
+    <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--navy-2)', fontWeight:600 }}>
+      <div style={{ fontSize: '28px', marginBottom: '12px' }}>⏳</div>
+      Memuat Panel Admin...
+    </div>
+  )
 
   if (!isAdmin) {
     return <LoginScreen onSuccess={handleLoginSuccess} />
@@ -680,65 +767,80 @@ export default function App() {
         onResetPassword={() => setModal('password')}
       />
       <div className="hero">
-        <div className="hero-kicker">Today's Menu (Admin)</div>
-        <h1>{menuState.title}</h1>
-        <div className="date">{fmtDate(menuState.date)}</div>
+        <div className="hero-kicker">Today&apos;s Menu (Admin)</div>
+        <h1>{expired ? '— Tidak ada menu aktif —' : (menuState.title || '—')}</h1>
+        <div className="date">{fmtDate(expired ? todayIso() : menuState.date)}</div>
       </div>
+
+      {/* EXPIRED WARNING */}
+      {expired && <ExpiredBanner onEdit={() => setModal('edit')} />}
 
       {/* PHOTO */}
-      <div className="photo-card">
-        {photos.length > 0 ? (
-          <div className="slideshow">
-            <img src={photos[displayIndex]} alt={`Foto menu ${displayIndex + 1}`} />
-            {photos.length > 1 && (
-              <div className="slideshow-controls">
-                <button className="slideshow-btn" onClick={() => setPhotoIndex(prev => (prev - 1 + photos.length) % photos.length)} aria-label="Foto sebelumnya">‹</button>
-                <div className="slideshow-dots">
-                  {photos.map((_, idx) => (
-                    <span key={idx} className={`slideshow-dot${idx === photoIndex ? ' active' : ''}`} />
-                  ))}
+      {!expired && (
+        <div className="photo-card">
+          {photos.length > 0 ? (
+            <div className="slideshow">
+              <img src={photos[displayIndex]} alt={`Foto menu ${displayIndex + 1}`} />
+              {photos.length > 1 && (
+                <div className="slideshow-controls">
+                  <button className="slideshow-btn" onClick={() => setPhotoIndex(prev => (prev - 1 + photos.length) % photos.length)} aria-label="Foto sebelumnya">‹</button>
+                  <div className="slideshow-dots">
+                    {photos.map((_, idx) => (
+                      <span key={idx} className={`slideshow-dot${idx === photoIndex ? ' active' : ''}`} />
+                    ))}
+                  </div>
+                  <button className="slideshow-btn" onClick={() => setPhotoIndex(prev => (prev + 1) % photos.length)} aria-label="Foto berikutnya">›</button>
                 </div>
-                <button className="slideshow-btn" onClick={() => setPhotoIndex(prev => (prev + 1) % photos.length)} aria-label="Foto berikutnya">›</button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="photo-empty">
-            Belum ada foto menu — tekan Edit Menu untuk menambahkan
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          ) : (
+            <div className="photo-empty">
+              Belum ada foto menu — tekan Edit Menu untuk menambahkan
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MENU LIST */}
-      <div className="section-label">MENU HARI INI</div>
-      <div className="menu-list">
-        {(menuState.menuItems || []).map((item, i) => (
-          <div className="menu-item" key={i}>{item}</div>
-        ))}
-      </div>
+      {!expired && (
+        <>
+          <div className="section-label">MENU HARI INI</div>
+          <div className="menu-list">
+            {(menuState.menuItems || []).length === 0 ? (
+              <div className="menu-item" style={{ color: 'var(--navy-2)', fontStyle: 'italic' }}>
+                Belum ada menu — tekan Edit Menu untuk menambahkan
+              </div>
+            ) : (
+              (menuState.menuItems || []).map((item, i) => (
+                <div className="menu-item" key={i}>{item}</div>
+              ))
+            )}
+          </div>
 
-      {/* NUTRITION */}
-      <div className="section-label">KANDUNGAN GIZI</div>
-      <div className="tabs">
-        {CATS.map(c => (
-          <div
-            key={c.key}
-            className={`tab${c.key === activeTab ? ' active' : ''}`}
-            onClick={() => setActiveTab(c.key)}
-          >
-            {c.key === 'balita' ? 'Balita' : c.key === 'bumil' ? 'Bumil/Busui' : c.key === 'k1' ? 'Porsi Kecil' : 'Porsi Besar'}
+          {/* NUTRITION */}
+          <div className="section-label">KANDUNGAN GIZI</div>
+          <div className="tabs">
+            {CATS.map(c => (
+              <div
+                key={c.key}
+                className={`tab${c.key === activeTab ? ' active' : ''}`}
+                onClick={() => setActiveTab(c.key)}
+              >
+                {c.key === 'balita' ? 'Balita' : c.key === 'bumil' ? 'Bumil/Busui' : c.key === 'k1' ? 'Porsi Kecil' : 'Porsi Besar'}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="nutri-card">
-        <div className="nutri-tag">{cat.label.toUpperCase()}</div>
-        {FIELDS.map(f => (
-          <div className="nutri-row" key={f.key}>
-            <span>{f.label}</span>
-            <span className="nutri-val">{vals[f.key] || '—'}</span>
+          <div className="nutri-card">
+            <div className="nutri-tag">{cat.label.toUpperCase()}</div>
+            {FIELDS.map(f => (
+              <div className="nutri-row" key={f.key}>
+                <span>{f.label}</span>
+                <span className="nutri-val">{vals[f.key] || '—'}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {/* QR CODE GENERATOR SECTION */}
       <QRCodeSection showToast={showToast} />

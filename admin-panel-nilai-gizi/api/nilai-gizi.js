@@ -7,10 +7,11 @@ export default async function handler(req, res) {
     const originalJson = res.json.bind(res)
     res.json = (body) => {
       if (body && body.value) {
-        try {
+          try {
           const parsed = typeof body.value === 'string' ? JSON.parse(body.value) : body.value
           return originalJson({ success: true, data: parsed })
-        } catch {
+        } catch (e) {
+          console.warn('nilai-gizi: parse value failed', e)
           return originalJson({ success: true, data: body.value })
         }
       }
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     let body = req.body
     if (typeof body === 'string') {
-      try { body = JSON.parse(body) } catch {}
+      try { body = JSON.parse(body) } catch (e) { console.warn('nilai-gizi: parse body failed', e) }
     }
     req.body = { key: 'sppg-menu-current', value: body }
     return storageHandler(req, res)

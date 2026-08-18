@@ -1,48 +1,38 @@
 {
-  "date": "2026-08-12",
-  "title": "Kentang Goreng + Chicken Steak Krispy Saus BBQ + Steam Buncis dan Wortel + Buah Semangka",
-  "image": "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
-  "images": [
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-0.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-1.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-2.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-3.jpg",
-    "https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/images/photo-4.jpg"
-  ],
-  "menuItems": [
-    "Kentang Goreng",
-    "Chicken Steak Krispy Saus BBQ",
-    "Steam Buncis dan Wortel",
-    "Buah Semangka"
-  ],
+  "date": "",
+  "title": "",
+  "image": "",
+  "images": [],
+  "menuItems": [],
+  "savedAt": null,
   "nutrition": {
     "k1": {
-      "energi": "409.6",
-      "protein": "15.4",
-      "lemak": "25.7",
-      "karbo": "31.7",
-      "serat": "1.3"
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
     },
     "k2": {
-      "energi": "742.4",
-      "protein": "19",
-      "lemak": "26.3",
-      "karbo": "105.5",
-      "serat": "7.3"
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
     },
     "balita": {
-      "energi": "409.6",
-      "protein": "15.4",
-      "lemak": "25.7",
-      "karbo": "31.7",
-      "serat": "1.3"
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
     },
     "bumil": {
-      "energi": "534.6",
-      "protein": "21.3",
-      "lemak": "31",
-      "karbo": "45.9",
-      "serat": "2"
+      "energi": "",
+      "protein": "",
+      "lemak": "",
+      "karbo": "",
+      "serat": ""
     }
   }
 }

@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/nilai-gizi'
-const STORAGE_KEY = 'sppg-menu-current'
+const STORAGE_ENDPOINT = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
+const GITHUB_RAW_URL   = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
+
+const DATA_TTL_MS = 24 * 60 * 60 * 1000 // 24 jam
 
 const CATS = [
-  { key: 'k1',     label: 'Porsi Kecil',  sub: 'TK/PAUD & SD 1–3' },
-  { key: 'k2',     label: 'Porsi Besar',  sub: 'SD 4–6, SMP & SMA' },
-  { key: 'balita', label: 'Balita',       sub: 'Anak Balita' },
+  { key: 'k1',     label: 'Porsi Kecil',   sub: 'TK/PAUD & SD 1–3' },
+  { key: 'k2',     label: 'Porsi Besar',   sub: 'SD 4–6, SMP & SMA' },
+  { key: 'balita', label: 'Balita',        sub: 'Anak Balita' },
   { key: 'bumil',  label: 'Bumil & Busui', sub: 'Ibu Hamil & Menyusui' },
 ]
 
@@ -37,54 +39,65 @@ function fmtDate(iso) {
   }
 }
 
-function defaultState() {
-  return {
-    date: todayIso(),
-    title: '',
-    image: '',
-    images: [],
-    menuItems: [],
-    nutrition: {
-      k1:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-      k2:     { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-      balita: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-      bumil:  { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-    },
-  }
+// Returns true if menu data is expired:
+// - date is not today (catches old data without savedAt), OR
+// - savedAt exists and is older than 24h
+function isDataExpired(menu) {
+  if (!menu) return false
+  if (menu.date && menu.date !== todayIso()) return true
+  if (menu.savedAt && Date.now() - new Date(menu.savedAt).getTime() > DATA_TTL_MS) return true
+  return false
+}
+
+// Add cache-busting to GitHub raw URLs to avoid stale CDN images
+function bustCache(url) {
+  if (!url || url.startsWith('data:')) return url
+  const cleanUrl = url.split('?')[0]
+  return `${cleanUrl}?t=${Date.now()}`
 }
 
 function getPhotoList(state) {
+  if (Array.isArray(state?.images) && state.images.length > 0) return state.images.map(bustCache)
+  if (state?.image) return [bustCache(state.image)]
+  return []
+}
+
+// Get raw URLs without cache-busting (for comparison only)
+function getRawPhotoList(state) {
   if (Array.isArray(state?.images) && state.images.length > 0) return state.images
   if (state?.image) return [state.image]
   return []
 }
 
-
-const STORAGE_ENDPOINT = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
-// GitHub raw URL — always fresh, no rate limit for public repo raw files
-const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
-
 export default function App() {
-  const [data, setData]             = useState(null)
-  const [activeTab, setActiveTab]   = useState('k1')
-  const [loading, setLoading]       = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [photoIndex, setPhotoIndex] = useState(0)
-  const [lightbox, setLightbox]     = useState(null) // index of photo in lightbox, null = closed
+  const [data,         setData]         = useState(null)
+  const [activeTab,    setActiveTab]    = useState('k1')
+  const [loading,      setLoading]      = useState(true)
+  const [refreshing,   setRefreshing]   = useState(false)
+  const [lastUpdated,  setLastUpdated]  = useState(null)
+  const [photoIndex,   setPhotoIndex]   = useState(0)
+  const [lightbox,     setLightbox]     = useState(null) // null = closed, number = open index
   const lightboxRef = useRef(null)
+  const prevDataRef = useRef(null)
 
-  const applyData = (d) => {
+  const applyData = useCallback((d) => {
+    // Only reset photoIndex when images actually change (compare raw URLs)
+    const prevPhotos = JSON.stringify(getRawPhotoList(prevDataRef.current))
+    const newPhotos  = JSON.stringify(getRawPhotoList(d))
+    if (prevPhotos !== newPhotos) {
+      setPhotoIndex(0)
+    }
+    prevDataRef.current = d
     setData(d)
     setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     setLoading(false)
     setRefreshing(false)
-  }
+  }, [])
 
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // PRIMARY: Vercel API (reads from GitHub API = always fresh, no CDN cache)
+    // PRIMARY: Vercel API (reads from GitHub API = always fresh)
     try {
       const res = await fetch(`${STORAGE_ENDPOINT}?_=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
@@ -97,9 +110,11 @@ export default function App() {
           }
         }
       }
-    } catch {}
+    } catch (err) {
+      void err
+    }
 
-    // FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
+    // FALLBACK: GitHub raw URL
     try {
       const res = await fetch(GITHUB_RAW_URL + '?_=' + Date.now(), { cache: 'no-store' })
       if (res.ok) {
@@ -109,28 +124,36 @@ export default function App() {
           return
         }
       }
-    } catch {}
+    } catch (err) {
+      void err
+    }
 
-    // No data yet — show empty state
-    applyData(defaultState())
-
-    setLoading(false)
-    setRefreshing(false)
-  }, [])
+    // No data — show empty state
+    applyData({ date: todayIso(), title: '', image: '', images: [], menuItems: [], nutrition: { k1:{}, k2:{}, balita:{}, bumil:{} }, savedAt: null })
+  }, [applyData])
 
   useEffect(() => {
-    fetchData()
-
-    // Interval fetch every 15 seconds for real-time synchronization
-    const interval = setInterval(() => {
-      fetchData()
-    }, 15000)
-
-    return () => clearInterval(interval)
+    let active = true
+    const poll = async () => {
+      if (!active) return
+      await fetchData(false)
+    }
+    void poll()
+    // Poll every 10 seconds for near real-time updates
+    const interval = setInterval(() => { void poll() }, 10000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
   }, [fetchData])
 
-  const photos = getPhotoList(data)
+  // Whether the current data is expired (older than 24h)
+  const expired = isDataExpired(data)
 
+  // Photos: show empty if data is expired
+  const photos = (expired || !data) ? [] : getPhotoList(data)
+
+  // Auto-advance slideshow
   useEffect(() => {
     if (photos.length < 2) return
     const timer = setInterval(() => {
@@ -139,7 +162,7 @@ export default function App() {
     return () => clearInterval(timer)
   }, [photos.length])
 
-  // Keyboard: ESC closes lightbox, arrow keys navigate
+  // Keyboard navigation for lightbox
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') setLightbox(null)
@@ -160,9 +183,55 @@ export default function App() {
     )
   }
 
-  const currentCat = CATS.find(c => c.key === activeTab)
+  // If data is expired — show empty/no-menu state
+  if (expired) {
+    return (
+      <div className="public-wrap">
+        <header className="public-topbar">
+          <div className="brand">
+            <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA Logo" />
+            <div className="brand-names">
+              <b>SPPG BINAWIDYA</b>
+              <span>SIMPANG BARU 7</span>
+            </div>
+          </div>
+          <div className="public-badge">
+            <span className="public-badge-dot" style={{ background: '#aaa', boxShadow: 'none' }}></span>
+            TAMPILAN PUBLIK
+          </div>
+        </header>
+
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🍽️</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy)', marginBottom: '8px' }}>
+            Menu Belum Tersedia
+          </div>
+          <div style={{ fontSize: '14px', color: 'var(--navy-2)', maxWidth: '300px', margin: '0 auto', lineHeight: 1.6 }}>
+            Menu hari ini belum diinput atau sudah melewati 24 jam. Silakan cek kembali nanti.
+          </div>
+          <div style={{ marginTop: '16px', fontSize: '12px', color: '#999' }}>
+            Terakhir diperbarui: {lastUpdated || '—'}
+          </div>
+          <button
+            style={{ marginTop: '16px', background: 'none', border: 'none', color: 'var(--navy-2)', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline' }}
+            onClick={() => fetchData(true)}
+          >
+            {refreshing ? 'Memuat...' : 'Coba perbarui'}
+          </button>
+        </div>
+
+        <footer className="public-footer">
+          <p><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
+          <p>Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
+          <p style={{marginTop: '10px', fontSize: '0.9em', opacity: 0.8}}>&copy; {new Date().getFullYear()} Afnand Fachzevi</p>
+        </footer>
+      </div>
+    )
+  }
+
+  const currentCat       = CATS.find(c => c.key === activeTab)
   const currentNutrition = data.nutrition?.[activeTab] || {}
-  const displayIndex = photos.length > 0 ? photoIndex % photos.length : 0
+  const displayIndex     = photos.length > 0 ? photoIndex % photos.length : 0
 
   return (
     <div className="public-wrap">
@@ -200,7 +269,7 @@ export default function App() {
 
       {/* HERO SECTION */}
       <div className="hero">
-        <div className="hero-kicker">Today's Menu</div>
+        <div className="hero-kicker">Today&apos;s Menu</div>
         <h1>{data.title || 'Belum Ada Judul Menu'}</h1>
         <div className="date-badge">
           📅 {fmtDate(data.date)}
