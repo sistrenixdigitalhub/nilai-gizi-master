@@ -104,12 +104,39 @@ app.get('/api/nilai-gizi', async (req, res) => {
   }
 })
 
+// Helper to sanitize string inputs against XSS and injection
+const cleanStr = (s) => (s === null || s === undefined ? '' : String(s).replace(/[<>]/g, '').trim())
+
+function sanitizePayload(data) {
+  if (!data || typeof data !== 'object') return data
+  const sanitized = { ...data }
+  if (sanitized.title !== undefined) sanitized.title = cleanStr(sanitized.title)
+  if (sanitized.date !== undefined) sanitized.date = cleanStr(sanitized.date)
+  if (Array.isArray(sanitized.menuItems)) {
+    sanitized.menuItems = sanitized.menuItems.map(cleanStr).filter(Boolean)
+  }
+  if (sanitized.nutrition && typeof sanitized.nutrition === 'object') {
+    const nutri = {}
+    for (const cat of ['k1', 'k2', 'balita', 'bumil']) {
+      nutri[cat] = {}
+      if (sanitized.nutrition[cat] && typeof sanitized.nutrition[cat] === 'object') {
+        for (const field of ['energi', 'protein', 'lemak', 'karbo', 'serat']) {
+          nutri[cat][field] = cleanStr(sanitized.nutrition[cat][field])
+        }
+      }
+    }
+    sanitized.nutrition = nutri
+  }
+  return sanitized
+}
+
 app.post('/api/nilai-gizi', async (req, res) => {
   try {
-    const newData = req.body
-    if (!newData) {
+    const rawData = req.body
+    if (!rawData) {
       return res.status(400).json({ success: false, error: 'Data tidak boleh kosong' })
     }
+    const newData = sanitizePayload(rawData)
     const store = await readData()
     const stampedData = {
       ...newData,
@@ -158,6 +185,7 @@ app.post('/api/storage', async (req, res) => {
       }
     }
     if (parsedValue && typeof parsedValue === 'object') {
+      parsedValue = sanitizePayload(parsedValue)
       parsedValue.savedAt = new Date().toISOString()
     }
     store[key] = parsedValue
@@ -169,30 +197,6 @@ app.post('/api/storage', async (req, res) => {
   }
 })
 
-app.post('/api/storage', async (req, res) => {
-  const { key, value } = req.body
-  if (!key) {
-    return res.status(400).json({ error: 'Missing key' })
-  }
-  try {
-    const store = await readData()
-    let parsedValue = value
-    if (typeof value === 'string') {
-      try {
-        parsedValue = JSON.parse(value)
-      } catch {
-        parsedValue = value
-      }
-    }
-    store[key] = parsedValue
-    await writeData(store)
-    // Include imageUrls in response for compatibility with admin panel
-    const imageUrls = parsedValue?.images || []
-    res.json({ ok: true, persistent: true, imageUrls })
-  } catch (err) {
-    res.status(500).json({ error: err.message, persistent: false })
-  }
-})
 
 // Start server when run directly
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {

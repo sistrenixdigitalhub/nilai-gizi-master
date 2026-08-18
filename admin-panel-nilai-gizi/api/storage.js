@@ -269,12 +269,30 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing menu data' })
       }
 
+      // Sanitize input to prevent injection
+      const cleanStr = (s) => (s === null || s === undefined ? '' : String(s).replace(/[<>]/g, '').trim())
+      menuObj.title = cleanStr(menuObj.title)
+      menuObj.date = cleanStr(menuObj.date) || todayIso()
+      if (Array.isArray(menuObj.menuItems)) {
+        menuObj.menuItems = menuObj.menuItems.map(cleanStr).filter(Boolean)
+      }
+      if (menuObj.nutrition && typeof menuObj.nutrition === 'object') {
+        for (const cat of ['k1', 'k2', 'balita', 'bumil']) {
+          if (menuObj.nutrition[cat] && typeof menuObj.nutrition[cat] === 'object') {
+            for (const field of ['energi', 'protein', 'lemak', 'karbo', 'serat']) {
+              menuObj.nutrition[cat][field] = cleanStr(menuObj.nutrition[cat][field])
+            }
+          }
+        }
+      }
+
       // Always stamp savedAt so 24h TTL works correctly
       menuObj.savedAt = new Date().toISOString()
 
       // Upload new images and delete old ones
       if (Array.isArray(menuObj.images)) {
         const hasBase64 = menuObj.images.some(img => img && img.startsWith('data:'))
+
 
         if (hasBase64) {
           // Upload new + delete old

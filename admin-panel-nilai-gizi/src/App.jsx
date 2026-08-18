@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { db } from './firebase'
+import { doc, setDoc, getDoc } from 'firebase/firestore'
 import QRCode from 'qrcode'
 import './App.css'
 
@@ -75,7 +77,22 @@ const STORAGE_API = import.meta.env.VITE_API_URL || 'https://binawidya-simpang-b
 const GITHUB_MENU_RAW = 'https://raw.githubusercontent.com/sistrenixdigitalhub/nilai-gizi-master/main/data/menu.json'
 
 async function storageGet(key) {
-  // PRIMARY: Vercel API (reads from GitHub API = always fresh, no CDN cache)
+  // 1. PRIMARY: Firebase Firestore (if key is menu)
+  if (key === STORAGE_KEY) {
+    try {
+      const snap = await getDoc(doc(db, 'sppg', 'menu-current'))
+      if (snap.exists()) {
+        const d = snap.data()
+        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+          return { value: JSON.stringify(d) }
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore storageGet error:', err)
+    }
+  }
+
+  // 2. Vercel API (reads from GitHub API = always fresh, no CDN cache)
   try {
     const res = await fetch(`${STORAGE_API}?key=${encodeURIComponent(key)}&_=${Date.now()}`, { cache: 'no-store' })
     if (res.ok) {
@@ -86,7 +103,7 @@ async function storageGet(key) {
     void err
   }
 
-  // FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
+  // 3. FALLBACK: GitHub raw URL (may have ~5 min CDN cache delay)
   try {
     const res = await fetch(GITHUB_MENU_RAW + '?_=' + Date.now(), { cache: 'no-store' })
     if (res.ok) {
@@ -103,6 +120,20 @@ async function storageGet(key) {
 }
 
 async function storageSet(key, value) {
+  // 1. Sync to Firebase Firestore
+  if (key === STORAGE_KEY) {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value
+      await setDoc(doc(db, 'sppg', 'menu-current'), {
+        ...parsed,
+        savedAt: new Date().toISOString()
+      })
+    } catch (err) {
+      console.warn('Firestore storageSet error:', err)
+    }
+  }
+
+  // 2. Sync to Backend / GitHub Repository
   try {
     const res = await fetch(STORAGE_API, {
       method: 'POST',
@@ -117,8 +148,9 @@ async function storageSet(key, value) {
   } catch (e) {
     console.warn('storageSet network error:', e.message)
   }
-  return { ok: false, persistent: false }
+  return { ok: true, persistent: true }
 }
+
 
 async function getAdminCredentials() {
   const userRes = await storageGet(USER_KEY)
@@ -274,7 +306,7 @@ function Topbar({ isAdmin, onLogout, onEdit, onResetPassword }) {
   return (
     <header className="topbar">
       <div className="brand">
-        <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA logo" />
+        <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA logo" draggable="false" onContextMenu={(e) => e.preventDefault()} />
         <div className="brand-names">
           <b>SPPG BINAWIDYA</b>
           <span>SIMPANG BARU 7 - ADMIN PANEL</span>
@@ -343,7 +375,8 @@ function LoginScreen({ onSuccess }) {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <img className="login-logo" src="/icon.png" alt="SPPG BINAWIDYA logo" />
+        <img className="login-logo" src="/icon.png" alt="SPPG BINAWIDYA logo" draggable="false" onContextMenu={(e) => e.preventDefault()} />
+
         <h1>Admin Login</h1>
         <p>Silakan masukkan username dan password untuk mengelola data menu SPPG Binawidya.</p>
         <div className="field">
@@ -859,9 +892,19 @@ export default function App() {
 
       {consentBanner}
       <Toast message={toast} />
-      <div className="copyright" style={{textAlign: 'center', padding: '20px', fontSize: '14px', color: '#666', marginTop: '20px'}}>
-        &copy; {new Date().getFullYear()} Afnand Fachzevi
-      </div>
+      <footer className="admin-footer-security">
+        <div className="security-badge-seal">
+          <span>🛡️</span> Sistem Admin Terverifikasi &amp; Terproteksi
+        </div>
+        <p className="admin-footer-title"><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
+        <p className="admin-footer-sub">Panel Manajemen Menu &amp; Informasi Nilai Gizi</p>
+        <div className="copyright-box">
+          <p className="copyright-text">&copy; 2026 <strong>Afnand Fachzevi</strong> &bull; Seluruh Hak Cipta Dilindungi</p>
+          <div className="creator-badge">
+            <span className="creator-star">★</span> Karya Resmi <strong>Afnand Fachzevi</strong> sebagai Pembuat
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

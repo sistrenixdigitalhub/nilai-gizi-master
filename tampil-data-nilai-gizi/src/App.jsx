@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { db } from './firebase'
+import { doc, onSnapshot, getDoc } from 'firebase/firestore'
 import './App.css'
 
 const STORAGE_ENDPOINT = 'https://binawidya-simpang-baru-7-nilai-gizi.vercel.app/api/storage'
@@ -49,6 +51,59 @@ function isDataExpired(menu) {
   return false
 }
 
+// ── SECURITY & SANITIZATION HELPERS ──
+function isSafeImageUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  // Allow safe base64 data URLs for images
+  if (/^data:image\/(png|jpeg|jpg|webp|gif|svg\+xml);base64,/i.test(trimmed)) return true
+  // Allow secure https URLs
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://localhost:')) return true
+  // Allow root-relative static asset paths (e.g. /icon.png)
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true
+  return false
+}
+
+function sanitizeText(str) {
+  if (str === null || str === undefined) return ''
+  // Strip HTML angle brackets and dangerous characters to prevent injection
+  return String(str)
+    .replace(/[<>]/g, '')
+    .trim()
+}
+
+function sanitizeMenuData(d) {
+  if (!d || typeof d !== 'object') return null
+  const rawList = Array.isArray(d.images) ? d.images : (d.image ? [d.image] : [])
+  const sanitizedImages = rawList.filter(isSafeImageUrl)
+
+  const sanitizedMenuItems = Array.isArray(d.menuItems)
+    ? d.menuItems.map(sanitizeText).filter(Boolean)
+    : []
+
+  const sanitizedNutrition = { k1: {}, k2: {}, balita: {}, bumil: {} }
+  if (d.nutrition && typeof d.nutrition === 'object') {
+    for (const cat of ['k1', 'k2', 'balita', 'bumil']) {
+      sanitizedNutrition[cat] = {}
+      if (d.nutrition[cat] && typeof d.nutrition[cat] === 'object') {
+        for (const field of ['energi', 'protein', 'lemak', 'karbo', 'serat']) {
+          sanitizedNutrition[cat][field] = sanitizeText(d.nutrition[cat][field])
+        }
+      }
+    }
+  }
+
+  return {
+    date: sanitizeText(d.date) || todayIso(),
+    title: sanitizeText(d.title),
+    image: sanitizedImages[0] || '',
+    images: sanitizedImages,
+    menuItems: sanitizedMenuItems,
+    nutrition: sanitizedNutrition,
+    savedAt: d.savedAt || null,
+  }
+}
+
 // Add cache-busting to GitHub raw URLs to avoid stale CDN images
 function bustCache(url) {
   if (!url || url.startsWith('data:')) return url
@@ -80,7 +135,8 @@ export default function App() {
   const lightboxRef = useRef(null)
   const prevDataRef = useRef(null)
 
-  const applyData = useCallback((d) => {
+  const applyData = useCallback((raw) => {
+    const d = sanitizeMenuData(raw)
     // Only reset photoIndex when images actually change (compare raw URLs)
     const prevPhotos = JSON.stringify(getRawPhotoList(prevDataRef.current))
     const newPhotos  = JSON.stringify(getRawPhotoList(d))
@@ -97,7 +153,22 @@ export default function App() {
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
 
-    // PRIMARY: Vercel API (reads from GitHub API = always fresh)
+    // 1. PRIMARY: Firebase Firestore (Real-time & Fast)
+    try {
+      const docRef = doc(db, 'sppg', 'menu-current')
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const d = docSnap.data()
+        if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+          applyData(d)
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore fetch fallback:', err)
+    }
+
+    // 2. FALLBACK A: Vercel API (reads from GitHub API)
     try {
       const res = await fetch(`${STORAGE_ENDPOINT}?_=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
@@ -114,7 +185,7 @@ export default function App() {
       void err
     }
 
-    // FALLBACK: GitHub raw URL
+    // 3. FALLBACK B: GitHub raw URL
     try {
       const res = await fetch(GITHUB_RAW_URL + '?_=' + Date.now(), { cache: 'no-store' })
       if (res.ok) {
@@ -134,18 +205,42 @@ export default function App() {
 
   useEffect(() => {
     let active = true
-    const poll = async () => {
-      if (!active) return
-      await fetchData(false)
+
+    // Real-time Firestore Listener
+    let unsubscribe = null
+    try {
+      const docRef = doc(db, 'sppg', 'menu-current')
+      unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (!active) return
+        if (docSnap.exists()) {
+          const d = docSnap.data()
+          if (d && (d.title || d.menuItems?.length > 0 || d.images?.length > 0 || d.image)) {
+            applyData(d)
+            return
+          }
+        }
+        void fetchData(false)
+      }, (error) => {
+        console.warn('Firestore snapshot error, falling back to polling:', error)
+        void fetchData(false)
+      })
+    } catch (e) {
+      console.warn('Firestore snapshot init error:', e)
+      void fetchData(false)
     }
-    void poll()
-    // Poll every 10 seconds for near real-time updates
-    const interval = setInterval(() => { void poll() }, 10000)
+
+    // Secondary Polling interval (every 30 seconds for fallback redundancy)
+    const interval = setInterval(() => {
+      if (active) void fetchData(false)
+    }, 30000)
+
     return () => {
       active = false
+      if (unsubscribe) unsubscribe()
       clearInterval(interval)
     }
-  }, [fetchData])
+  }, [fetchData, applyData])
+
 
   // Whether the current data is expired (older than 24h)
   const expired = isDataExpired(data)
@@ -189,7 +284,7 @@ export default function App() {
       <div className="public-wrap">
         <header className="public-topbar">
           <div className="brand">
-            <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA Logo" />
+            <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA Logo" draggable="false" onContextMenu={(e) => e.preventDefault()} />
             <div className="brand-names">
               <b>SPPG BINAWIDYA</b>
               <span>SIMPANG BARU 7</span>
@@ -221,9 +316,17 @@ export default function App() {
         </div>
 
         <footer className="public-footer">
-          <p><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
-          <p>Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
-          <p style={{marginTop: '10px', fontSize: '0.9em', opacity: 0.8}}>&copy; {new Date().getFullYear()} Afnand Fachzevi</p>
+          <div className="security-badge-seal">
+            <span className="shield-icon">🛡️</span> Sistem Terverifikasi &amp; Terlindungi
+          </div>
+          <p className="footer-title"><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
+          <p className="footer-subtitle">Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
+          <div className="copyright-box">
+            <p className="copyright-text">&copy; 2026 <strong>Afnand Fachzevi</strong> &bull; Seluruh Hak Cipta Dilindungi</p>
+            <div className="creator-badge">
+              <span className="creator-star">★</span> Karya Resmi <strong>Afnand Fachzevi</strong> sebagai Pembuat
+            </div>
+          </div>
         </footer>
       </div>
     )
@@ -238,7 +341,7 @@ export default function App() {
       {/* BRAND TOPBAR */}
       <header className="public-topbar">
         <div className="brand">
-          <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA Logo" />
+          <img className="brand-logo" src="/icon.png" alt="SPPG BINAWIDYA Logo" draggable="false" onContextMenu={(e) => e.preventDefault()} />
           <div className="brand-names">
             <b>SPPG BINAWIDYA</b>
             <span>SIMPANG BARU 7</span>
@@ -286,6 +389,8 @@ export default function App() {
               onClick={() => setLightbox(displayIndex)}
               style={{ cursor: 'zoom-in' }}
               title="Klik untuk perbesar"
+              draggable="false"
+              onContextMenu={(e) => e.preventDefault()}
             />
             <div className="photo-zoom-hint">🔍 Klik foto untuk perbesar</div>
             {photos.length > 1 && (
@@ -342,6 +447,8 @@ export default function App() {
               src={photos[lightbox]}
               alt={`Foto Menu ${lightbox + 1}`}
               className="lightbox-img"
+              draggable="false"
+              onContextMenu={(e) => e.preventDefault()}
             />
             <div className="lightbox-counter">{lightbox + 1} / {photos.length}</div>
           </div>
@@ -416,10 +523,19 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="public-footer">
-        <p><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
-        <p>Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
-        <p style={{marginTop: '10px', fontSize: '0.9em', opacity: 0.8}}>&copy; {new Date().getFullYear()} Afnand Fachzevi</p>
+        <div className="security-badge-seal">
+          <span className="shield-icon">🛡️</span> Sistem Terverifikasi &amp; Terlindungi
+        </div>
+        <p className="footer-title"><b>SPPG BINAWIDYA SIMPANG BARU 7</b></p>
+        <p className="footer-subtitle">Sistem Informasi Nilai Gizi Harian &amp; Konsumsi Sekolah</p>
+        <div className="copyright-box">
+          <p className="copyright-text">&copy; 2026 <strong>Afnand Fachzevi</strong> &bull; Seluruh Hak Cipta Dilindungi</p>
+          <div className="creator-badge">
+            <span className="creator-star">★</span> Karya Resmi <strong>Afnand Fachzevi</strong> sebagai Pembuat
+          </div>
+        </div>
       </footer>
     </div>
   )
 }
+
